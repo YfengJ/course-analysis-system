@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '报告中心' %}
+{% set intro_title = '报告记录与结果查看' %}
+{% set intro_text = '统一浏览各课程已生成的分析报告，支持按课程关键词和结果状态快速定位。' %}
+{% set intro_meta = ['全部报告 ' ~ summary.all, '达成 ' ~ summary.completed, '未达成 ' ~ summary.pending] %}
+{% set intro_actions = [
+    {'href': url_for('dashboard.index'), 'label': '返回工作台', 'class': 'btn-outline-dark'},
+    {'href': url_for('course.index'), 'label': '查看课程列表', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+<div class="panel-card mb-4 reveal">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-lg-5">
+            <label class="form-label">关键词</label>
+            <input class="form-control" type="text" name="keyword" value="{{ keyword }}" placeholder="输入课程名称或课程编号">
+        </div>
+        <div class="col-lg-3">
+            <label class="form-label">结果状态</label>
+            <select class="form-select" name="status">
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>全部报告</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>达成</option>
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>未达成</option>
+            </select>
+        </div>
+        <div class="col-lg-4 d-flex gap-2">
+            <button class="btn btn-dark" type="submit">筛选报告</button>
+            <a href="{{ url_for('report_center.index') }}" class="btn btn-outline-dark">重置</a>
+        </div>
+    </form>
+</div>
+
+<div class="report-center-grid">
+    {% for item in report_rows %}
+    <article class="report-record-card">
+        <div class="directory-head">
+            <div>
+                <h2>{{ item.course_name }}</h2>
+                <p>{{ item.course_code or '原课程记录缺失' }} / {{ item.report.semester }} / {{ item.report.class_scope }}</p>
+            </div>
+            <div class="status-pill {{ 'ok' if item.report.status == '达成' else 'pending' }}">{{ item.report.status }}</div>
+        </div>
+        <div class="mini-stats mt-3">
+            <div><span>定量达成度</span><strong>{{ "%.2f"|format(item.report.quantitative_attainment) }}</strong></div>
+            <div><span>定性达成度</span><strong>{{ "%.2f"|format(item.report.qualitative_attainment) }}</strong></div>
+            <div><span>生成时间</span><strong>{{ item.report.created_at.strftime('%Y-%m-%d') }}</strong></div>
+            <div><span>统计范围</span><strong>{{ item.report.class_scope }}</strong></div>
+        </div>
+        <div class="course-actions compact mt-3">
+            {% if item.course %}
+            <a href="{{ url_for('report.preview', course_id=item.course.id, semester=item.report.semester, class_scope=item.report.class_scope) }}" class="btn btn-dark">查看报告</a>
+            {% endif %}
+            {% if item.course and item.download_ready %}
+            <a href="{{ url_for('report.download_report', course_id=item.course.id, report_id=item.report.id) }}" class="btn btn-outline-dark">下载 Word</a>
+            {% endif %}
+            {% if item.course %}
+            <a href="{{ url_for('analysis.index', course_id=item.course.id, semester=item.report.semester, class_scope=item.report.class_scope) }}" class="btn btn-outline-dark">对应分析</a>
+            {% endif %}
+        </div>
+    </article>
+    {% else %}
+    <div class="empty-panel">
+        <h3>当前没有符合条件的报告</h3>
+        <p>可先进入课程完成分析并生成报告，之后这里会自动汇总显示。</p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">返回工作台</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

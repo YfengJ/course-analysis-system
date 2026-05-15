@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '课程列表' %}
+{% set intro_title = '课程筛选与查看' %}
+{% set intro_text = '统一查看全部课程，并按“教学大纲 → 成绩导入 → 计算分析 → 报告预览/导出”的主流程快速定位当前阶段。' %}
+{% set intro_meta = ['全部课程 ' ~ summary.all, '待推进 ' ~ summary.pending, '已生成报告 ' ~ summary.completed] %}
+{% set intro_actions = [
+    {'href': url_for('dashboard.index'), 'label': '返回工作台', 'class': 'btn-outline-dark'},
+    {'href': url_for('course.create_course'), 'label': '新建课程', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+<div class="panel-card mb-4 reveal">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-lg-5">
+            <label class="form-label">关键词</label>
+            <input class="form-control" type="text" name="keyword" value="{{ keyword }}" placeholder="输入课程名称或课程编号">
+        </div>
+        <div class="col-lg-3">
+            <label class="form-label">状态</label>
+            <select class="form-select" name="status">
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>全部课程</option>
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待推进</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>已生成报告</option>
+            </select>
+        </div>
+        <div class="col-lg-4 d-flex gap-2">
+            <button class="btn btn-dark" type="submit">筛选课程</button>
+            <a href="{{ url_for('course.index') }}" class="btn btn-outline-dark">重置</a>
+        </div>
+    </form>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div>
+            <h2>状态说明</h2>
+            <p>这里的状态不是笼统的“已分析/未分析”，而是按主流程精确标记当前卡在哪一步。</p>
+        </div>
+    </div>
+    <div class="source-legend-grid">
+        <div class="simple-card"><strong>待上传大纲</strong><p class="mb-0">课程已建立，但还没有导入教学大纲。</p></div>
+        <div class="simple-card"><strong>待导入成绩</strong><p class="mb-0">教学大纲已就绪，但还没有导入成绩文件。</p></div>
+        <div class="simple-card"><strong>待计算第四章</strong><p class="mb-0">成绩已导入，但还没有在分析页手动点击“开始计算第四章数据”。</p></div>
+        <div class="simple-card"><strong>可预览报告 / 已生成报告</strong><p class="mb-0">第四章已经算完，可进入报告预览；若已导出正式 Word，会显示为“已生成报告”。</p></div>
+    </div>
+</div>
+
+<div class="course-directory reveal">
+    {% for item in course_rows %}
+    <article class="directory-card">
+        <div class="directory-head">
+            <div>
+                <h2>{{ item.course.name }}</h2>
+                <p>{{ item.course.code }} / {{ item.course.semester or '未设置学期' }}</p>
+                <small class="text-muted d-block mt-1">课程负责人：{{ item.course.course_owner or '未设置' }}</small>
+            </div>
+            <div class="status-pill {{ 'ok' if item.report_preview_ready else 'pending' }}">{{ item.status }}</div>
+        </div>
+        <div class="directory-meta">
+            <span>课程目标 {{ item.objective_count }}</span>
+            <span>考核项 {{ item.assessment_count }}</span>
+            <span>学生 {{ item.student_count }}</span>
+            <span>报告 {{ item.report_count }}</span>
+        </div>
+        <div class="mini-stage-track">
+            {% for stage in item.stages %}
+            <span class="{{ 'done' if stage.done else '' }}">{{ stage.label }}</span>
+            {% endfor %}
+        </div>
+        <div class="directory-bottom">
+            <div class="directory-next">
+                <span>下一步</span>
+                <strong>{{ item.next_action }}</strong>
+            </div>
+            <div class="course-actions compact">
+                <a href="{{ url_for('course.detail', course_id=item.course.id) }}" class="btn btn-dark">进入课程</a>
+                {% if item.outline_count == 0 %}
+                <a href="{{ url_for('course.show_outline', course_id=item.course.id) }}" class="btn btn-outline-dark">上传大纲</a>
+                {% elif item.student_count == 0 %}
+                <a href="{{ url_for('importer.import_scores', course_id=item.course.id) }}" class="btn btn-outline-dark">导入成绩</a>
+                {% elif not item.report_preview_ready %}
+                <a href="{{ url_for('analysis.index', course_id=item.course.id) }}" class="btn btn-outline-dark">开始计算</a>
+                {% elif item.report_ready %}
+                <a href="{{ url_for('report.preview', course_id=item.course.id) }}" class="btn btn-outline-dark">查看报告</a>
+                {% else %}
+                <a href="{{ url_for('report.preview', course_id=item.course.id) }}" class="btn btn-outline-dark">报告预览</a>
+                {% endif %}
+                <form method="post" action="{{ url_for('course.delete_course', course_id=item.course.id) }}" class="d-inline" onsubmit="return confirm('确定要删除这门课程吗？删除后会同时清除成绩、分析和报告记录。');">
+                    <button type="submit" class="btn btn-outline-danger">删除课程</button>
+                </form>
+            </div>
+        </div>
+    </article>
+    {% else %}
+    <div class="empty-panel">
+        <h3>暂无符合条件的课程</h3>
+        <p>可调整筛选条件，或直接创建一门新课程。</p>
+        <a href="{{ url_for('course.create_course') }}" class="btn btn-primary">创建课程</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="poster-hero reveal">
+    <div class="poster-copy">
+        <span class="eyebrow">课程分析平台</span>
+        <h1 class="poster-title">{{ system_name }}</h1>
+        <p class="poster-subtitle">围绕课程目标、教学大纲与成绩数据，按“教学大纲 → 成绩导入 → 计算分析 → 报告预览/导出”的四步主流程完成课程达成度报告。</p>
+        <div class="hero-actions">
+            <a href="{{ url_for('course.create_course') }}" class="btn btn-dark btn-lg">开始创建课程</a>
+            {% if featured_course %}
+            <a href="{{ url_for('course.detail', course_id=featured_course.course.id) }}" class="btn btn-outline-dark btn-lg">进入课程</a>
+            {% endif %}
+        </div>
+        <div class="evidence-strip">
+            <div class="evidence-item">
+                <span>课程信息</span>
+                <strong>3 类</strong>
+                <small>课程目标 / 教学大纲 / 成绩数据</small>
+            </div>
+            <div class="evidence-item">
+                <span>已创建课程</span>
+                <strong>{{ course_count }}</strong>
+                <small>当前已建立的课程空间</small>
+            </div>
+            <div class="evidence-item">
+                <span>已完成数据接入课程</span>
+                <strong>{{ template_ready_count }}</strong>
+                <small>已完成大纲与成绩接入</small>
+            </div>
+            <div class="evidence-item">
+                <span>已产出报告</span>
+                <strong>{{ report_count }}</strong>
+                <small>支持 Word 导出与 PDF 打印</small>
+            </div>
+        </div>
+    </div>
+    <div class="poster-stage">
+        {% if featured_course %}
+        <div class="poster-stage-head">
+            <div>
+                <h2>{{ featured_course.course.name }}</h2>
+                <p>{{ featured_course.course.code }} / {{ featured_course.course.semester or '未设置学期' }}</p>
+                <small class="text-white-50 d-block mt-1">课程负责人：{{ featured_course.course.course_owner or '未设置' }}</small>
+            </div>
+            <div class="status-pill {{ 'ok' if featured_course.report_preview_ready else 'pending' }}">
+                {{ featured_course.display_status }}
+            </div>
+        </div>
+        <div class="template-ribbon">
+            <span>教学大纲导入</span>
+            <span>成绩数据导入</span>
+            <span>计算分析与报告预览</span>
+        </div>
+        <div class="stage-metrics">
+            <div><span>已完成阶段</span><strong>{{ featured_course.completed_stage_count }}/4</strong></div>
+            <div><span>学生规模</span><strong>{{ featured_course.student_count }}</strong></div>
+            <div><span>下一步</span><strong>{{ featured_course.next_action }}</strong></div>
+            <div><span>当前进度</span><strong>{{ featured_course.display_status }}</strong></div>
+        </div>
+        <div class="focus-progress">
+            {% for stage in featured_course.stages %}
+            <div class="stage-pill {{ 'done' if stage.done else '' }}">{{ stage.label }}</div>
+            {% endfor %}
+        </div>
+        <div class="next-step-note">
+            <span>下一步建议</span>
+            <strong>{{ featured_course.next_action }}</strong>
+        </div>
+        <div class="hero-actions mt-4">
+            <a href="{{ url_for('course.detail', course_id=featured_course.course.id) }}" class="btn btn-light">进入课程</a>
+            {% if featured_course.outline_count == 0 %}
+            <a href="{{ url_for('course.show_outline', course_id=featured_course.course.id) }}" class="btn btn-outline-light">上传大纲</a>
+            {% elif featured_course.student_count == 0 %}
+            <a href="{{ url_for('importer.import_scores', course_id=featured_course.course.id) }}" class="btn btn-outline-light">导入成绩</a>
+            {% elif not featured_course.analysis_ready %}
+            <a href="{{ url_for('analysis.index', course_id=featured_course.course.id) }}" class="btn btn-outline-light">开始计算</a>
+            {% elif featured_course.report_ready %}
+            <a href="{{ url_for('report.preview', course_id=featured_course.course.id) }}" class="btn btn-outline-light">查看报告</a>
+            {% else %}
+            <a href="{{ url_for('report.preview', course_id=featured_course.course.id) }}" class="btn btn-outline-light">报告预览</a>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="empty-panel dark">
+            <h3>先创建第一门课程</h3>
+            <p>创建后即可进入教学大纲上传、成绩导入、计算分析和报告预览/导出流程。</p>
+            <a href="{{ url_for('course.create_course') }}" class="btn btn-light">立即创建</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="row g-4 mt-4">
+    <div class="col-xl-8 reveal">
+        <div class="panel-card course-stream-card h-100">
+            <div class="section-head">
+                <div>
+                    <h2>课程总览</h2>
+                    <p>集中查看课程当前状态、数据接入进度与报告生成情况。</p>
+                </div>
+                <a href="{{ url_for('course.create_course') }}" class="btn btn-primary">新建课程</a>
+            </div>
+            <div class="course-stream refined-stream">
+                {% for item in course_cards %}
+                <article class="course-list-item {{ 'sample' if item.is_sample else '' }}">
+                    <div class="course-list-head">
+                        <div>
+                            <div class="list-title-line">
+                                <h3>{{ item.course.name }}</h3>
+                            </div>
+                            <p>{{ item.course.code }} / {{ item.course.semester or '未设置学期' }}</p>
+                            <small class="text-muted d-block mt-1">课程负责人：{{ item.course.course_owner or '未设置' }}</small>
+                        </div>
+                        <div class="status-pill {{ 'ok' if item.report_preview_ready else 'pending' }}">
+                            {{ item.display_status }}
+                        </div>
+                    </div>
+                    <div class="list-inline-stats">
+                        <span>目标 {{ item.objective_count }}</span>
+                        <span>考核 {{ item.assessment_count }}</span>
+                        <span>学生 {{ item.student_count }}</span>
+                        <span>报告 {{ item.report_count }}</span>
+                        <span>数据接入 {{ '已完成' if item.template_ready else '待补全' }}</span>
+                    </div>
+                    <div class="mini-stage-track">
+                        {% for stage in item.stages %}
+                        <span class="{{ 'done' if stage.done else '' }}">{{ stage.label }}</span>
+                        {% endfor %}
+                    </div>
+                    <div class="next-step-inline">
+                        <span>下一步</span>
+                        <strong>{{ item.next_action }}</strong>
+                    </div>
+                    <div class="course-actions compact">
+                        <a href="{{ url_for('course.detail', course_id=item.course.id) }}" class="btn btn-dark">进入课程</a>
+                        {% if item.outline_count == 0 %}
+                        <a href="{{ url_for('course.show_outline', course_id=item.course.id) }}" class="btn btn-outline-dark">上传大纲</a>
+                        <a href="{{ url_for('course.manage_objectives', course_id=item.course.id) }}" class="btn btn-outline-dark">课程目标</a>
+                        {% elif item.student_count == 0 %}
+                        <a href="{{ url_for('importer.import_scores', course_id=item.course.id) }}" class="btn btn-outline-dark">导入成绩</a>
+                        <a href="{{ url_for('course.show_outline', course_id=item.course.id) }}" class="btn btn-outline-dark">查看大纲</a>
+                        {% elif not item.analysis_ready %}
+                        <a href="{{ url_for('analysis.index', course_id=item.course.id) }}" class="btn btn-outline-dark">开始计算</a>
+                        <a href="{{ url_for('importer.import_scores', course_id=item.course.id) }}" class="btn btn-outline-dark">查看成绩</a>
+                        {% elif item.report_ready %}
+                        <a href="{{ url_for('analysis.index', course_id=item.course.id) }}" class="btn btn-outline-dark">查看分析</a>
+                        <a href="{{ url_for('report.preview', course_id=item.course.id) }}" class="btn btn-outline-dark">查看报告</a>
+                        {% else %}
+                        <a href="{{ url_for('analysis.index', course_id=item.course.id) }}" class="btn btn-outline-dark">查看分析</a>
+                        <a href="{{ url_for('report.preview', course_id=item.course.id) }}" class="btn btn-outline-dark">报告预览</a>
+                        {% endif %}
+                    </div>
+                </article>
+                {% else %}
+                <div class="empty-panel">
+                    <h3>当前还没有课程</h3>
+                    <p>先创建一门课程，系统会自动生成通用骨架，再逐步接入教学大纲和成绩数据。</p>
+                    <a href="{{ url_for('course.create_course') }}" class="btn btn-primary">现在创建课程</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4 reveal">
+        <div class="panel-card report-timeline-card h-100">
+            <div class="section-head">
+                <div>
+                    <h2>最近报告</h2>
+                    <p>查看近期生成的课程分析报告和对应统计结果。</p>
+                </div>
+            </div>
+            <div class="report-timeline">
+                {% for item in recent_reports %}
+                <div class="timeline-item">
+                    <span class="timeline-dot {{ 'ok' if item.status == '达成' else 'pending' }}"></span>
+                    <div>
+                        <strong>{{ item.course.name }}</strong>
+                        <p>{{ item.created_at.strftime('%Y-%m-%d %H:%M') }} / {{ item.class_scope }}</p>
+                        <small>定量达成度 {{ "%.2f"|format(item.quantitative_attainment) }} · {{ item.status }}</small>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-panel">
+                    <h3>还没有报告记录</h3>
+                    <p>完成任一课程的分析与导出后，这里会自动形成结果流。</p>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="insight-note accent-note">
+                <strong>使用建议</strong>
+                <p class="mb-0">建议只按四步主流程走：教学大纲、成绩导入、计算分析、报告预览/导出；“手动课程目标”作为无大纲时的辅助入口即可。</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

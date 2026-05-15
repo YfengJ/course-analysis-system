@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '新建课程' %}
+{% set intro_title = '创建课程' %}
+{% set intro_text = '可手工填写课程信息，也可以直接上传教学大纲自动建课。' %}
+{% set intro_meta = ['支持教学大纲建课', '自动同步课程目标与考核权重', '创建后可继续上传成绩'] %}
+{% set intro_actions = [
+    {'href': url_for('dashboard.index'), 'label': '返回工作台', 'class': 'btn-outline-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="panel-card">
+            <h2 class="mb-3">课程基础信息</h2>
+            <form method="post">
+                {{ form.hidden_tag() }}
+                <div class="row g-3">
+                    <div class="col-md-6">{{ form.code.label(class="form-label") }}{{ form.code(class="form-control form-control-lg") }}</div>
+                    <div class="col-md-6">{{ form.name.label(class="form-label") }}{{ form.name(class="form-control form-control-lg") }}</div>
+                    <div class="col-md-6">{{ form.english_name.label(class="form-label") }}{{ form.english_name(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.semester.label(class="form-label") }}{{ form.semester(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.class_names.label(class="form-label") }}{{ form.class_names(class="form-control", placeholder="如：2025级1班、2025级2班") }}</div>
+                    <div class="col-md-6">{{ form.course_owner.label(class="form-label") }}{{ form.course_owner(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.assessment_method.label(class="form-label") }}{{ form.assessment_method(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.hours.label(class="form-label") }}{{ form.hours(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.credits.label(class="form-label") }}{{ form.credits(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.expected_value.label(class="form-label") }}{{ form.expected_value(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.department.label(class="form-label") }}{{ form.department(class="form-control") }}</div>
+                    <div class="col-md-12">{{ form.major.label(class="form-label") }}{{ form.major(class="form-control") }}</div>
+                    <div class="col-md-12">{{ form.description.label(class="form-label") }}{{ form.description(class="form-control", rows="5") }}</div>
+                </div>
+                <div class="mt-4">{{ form.submit(class="btn btn-dark btn-lg") }}</div>
+            </form>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="panel-card mb-4">
+            <h2 class="mb-3">直接上传教学大纲建课</h2>
+            <p class="tip-text">推荐老师使用这一种：系统会从 docx 教学大纲中读取课程编号、课程名称、学时学分、课程目标、毕业要求和考核权重。</p>
+            <form method="post" enctype="multipart/form-data" action="{{ url_for('course.create_course_from_outline') }}">
+                {{ outline_form.hidden_tag() }}
+                <div class="mb-3">{{ outline_form.file.label(class="form-label") }}{{ outline_form.file(class="form-control") }}</div>
+                {{ outline_form.submit(class="btn btn-dark w-100", value="上传大纲并创建课程") }}
+            </form>
+        </div>
+        <div class="panel-card h-100">
+            <h2 class="mb-3">创建后会自动准备</h2>
+            <div class="flow-list">
+                <div class="flow-item"><strong>A</strong><span>如果通过教学大纲建课，系统会优先采用大纲中的考核项和权重。</span></div>
+                <div class="flow-item"><strong>B</strong><span>如果手工建课，系统仍会提供默认目标骨架和通用考核项，后续可由大纲覆盖。</span></div>
+                <div class="flow-item"><strong>C</strong><span>成绩模板会跟随当前课程配置动态生成，不再固定为某一门课。</span></div>
+            </div>
+            <div class="create-note">
+                <span>提示</span>
+                <strong>创建完成后，系统会在首页课程卡片中自动给出下一步操作建议。</strong>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

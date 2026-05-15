@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '课程概览' %}
+{% set intro_title = course.name %}
+{% set intro_text = '按“教学大纲 → 成绩导入 → 计算分析 → 报告预览”的主流程完成当前课程。' %}
+{% set intro_meta = [course.code, (course.semester or '未设置学期'), ('负责人 ' ~ (course.course_owner or '未设置')), '期望值 ' ~ "%.2f"|format(course.expected_value)] %}
+{% set intro_actions = [
+    {'href': url_for('dashboard.index'), 'label': '返回工作台', 'class': 'btn-outline-dark'},
+    {'href': url_for('course.show_outline', course_id=course.id), 'label': '从第 1 步开始', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'overview' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="row g-4 mt-1">
+    <div class="col-xl-8 reveal">
+        <div class="panel-card mb-4 course-ops-card">
+            <div class="section-head">
+                <div>
+                    <h2>课程主流程</h2>
+                    <p>建议只按下面 4 个步骤走，避免把“手动课程目标”与主流程混在一起。</p>
+                </div>
+                <div class="section-kicker">{{ completed_steps }}/4 阶段已完成</div>
+            </div>
+            <div class="ops-grid">
+                <a class="step-card" href="{{ url_for('course.show_outline', course_id=course.id) }}">
+                    <span>01</span>
+                    <strong>上传教学大纲</strong>
+                    <p>{{ '已上传，可查看解析置信度与支撑关系' if latest_outline else '尚未上传，建议先完成解析' }}</p>
+                </a>
+                <a class="step-card" href="{{ url_for('importer.import_scores', course_id=course.id) }}">
+                    <span>02</span>
+                    <strong>导入成绩数据</strong>
+                    <p>{{ course.student_count or 0 }} 名学生数据已入库{% if latest_import %} / 最近文件 {{ latest_import.filename }}{% endif %}</p>
+                </a>
+                <a class="step-card" href="{{ url_for('analysis.index', course_id=course.id) }}">
+                    <span>03</span>
+                    <strong>计算达成度分析</strong>
+                    <p>在分析页点击“开始计算第四章数据”后，才展示定量、定性和分布结果</p>
+                </a>
+                <a class="step-card" href="{{ url_for('report.preview', course_id=course.id) }}">
+                    <span>04</span>
+                    <strong>报告预览/导出</strong>
+                    <p>{{ latest_report.status if latest_report else '计算完成后即可进入预览，导出 Word 时会生成正式记录' }}</p>
+                </a>
+            </div>
+            <div class="create-note mt-4">
+                <span>辅助入口说明</span>
+                <strong>“手动课程目标”只在未上传教学大纲、需要手工补目标时使用；如果已经上传了教学大纲，课程目标通常会自动回填，不需要单独走这一页。</strong>
+            </div>
+        </div>
+
+        <div class="panel-card subdued-card">
+            <div class="section-head">
+                <div>
+                    <h2>课程基础信息</h2>
+                    <p>维护课程编号、学期、学分、考核方式和课程简介等内容。</p>
+                </div>
+            </div>
+            <form method="post">
+                {{ form.hidden_tag() }}
+                <div class="row g-3">
+                    <div class="col-md-6">{{ form.code.label(class="form-label") }}{{ form.code(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.name.label(class="form-label") }}{{ form.name(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.english_name.label(class="form-label") }}{{ form.english_name(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.semester.label(class="form-label") }}{{ form.semester(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.class_names.label(class="form-label") }}{{ form.class_names(class="form-control", placeholder="如：2025级1班、2025级2班") }}</div>
+                    <div class="col-md-6">{{ form.course_owner.label(class="form-label") }}{{ form.course_owner(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.assessment_method.label(class="form-label") }}{{ form.assessment_method(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.hours.label(class="form-label") }}{{ form.hours(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.credits.label(class="form-label") }}{{ form.credits(class="form-control") }}</div>
+                    <div class="col-md-4">{{ form.expected_value.label(class="form-label") }}{{ form.expected_value(class="form-control") }}</div>
+                    <div class="col-md-6">{{ form.department.label(class="form-label") }}{{ form.department(class="form-control") }}</div>
+                    <div class="col-md-12">{{ form.major.label(class="form-label") }}{{ form.major(class="form-control") }}</div>
+                    <div class="col-md-12">{{ form.description.label(class="form-label") }}{{ form.description(class="form-control", rows="4") }}</div>
+                </div>
+                <div class="mt-4">{{ form.submit(class="btn btn-dark") }}</div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-4 reveal">
+        <div class="panel-card mb-4 spotlight-card">
+            <h2 class="mb-3">当前课程状态</h2>
+            <div class="mini-stats">
+                <div><span>课程目标</span><strong>{{ course.objectives|length }}</strong></div>
+                <div><span>考核项</span><strong>{{ course.assessments|length }}</strong></div>
+                <div><span>学生人数</span><strong>{{ course.student_count or 0 }}</strong></div>
+                <div><span>报告记录</span><strong>{{ course.reports|length }}</strong></div>
+            </div>
+        </div>
+        <div class="panel-card">
+            <h2 class="mb-3">最近状态与上下文</h2>
+            <ul class="plain-list">
+                <li>课程负责人：{{ course.course_owner or '未设置' }}</li>
+                <li>教学大纲：{{ latest_outline.filename if latest_outline else '尚未上传' }}</li>
+                <li>解析状态：{{ latest_outline.parse_status if latest_outline else '待解析' }}</li>
+                <li>解析置信度：{{ "%.0f%%"|format((latest_outline.confidence or 0) * 100) if latest_outline else '0%' }}</li>
+                <li>最近导入：{{ latest_import.filename if latest_import else '尚未导入成绩' }}</li>
+                <li>最近计算：{{ latest_analysis.updated_at.strftime('%Y-%m-%d %H:%M') if latest_analysis else '尚未执行第四章计算' }}</li>
+                <li>最近报告：{{ latest_report.created_at.strftime('%Y-%m-%d %H:%M') if latest_report else '尚未生成' }}</li>
+                <li>考核方式：{{ course.assessment_method or '未设置' }}</li>
+                <li>适用专业：{{ course.major or '未设置' }}</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

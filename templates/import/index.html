@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '成绩导入' %}
+{% set intro_title = course.name %}
+{% set intro_text = '这一步只负责把成绩文件导入系统并完成校验，不在这里直接展示第四章结果。' %}
+{% set intro_meta = [course.code, '当前学生 ' ~ (course.student_count or 0), '最近导入 ' ~ (recent_imports[0].created_at.strftime('%Y-%m-%d') if recent_imports else '暂无')] %}
+{% set intro_actions = [
+    {'href': url_for('course.show_outline', course_id=course.id), 'label': '先看教学大纲', 'class': 'btn-outline-dark'},
+    {'href': url_for('importer.download_score_template', course_id=course.id), 'label': '下载成绩模板', 'class': 'btn-outline-dark'},
+    {'href': url_for('analysis.index', course_id=course.id), 'label': '下一步去计算分析', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'imports' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="row g-4 mt-1">
+    <div class="col-lg-5">
+        <div class="panel-card upload-panel reveal">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <h2 class="mb-0">上传成绩文件</h2>
+                <a class="btn btn-outline-dark btn-sm" href="{{ url_for('importer.download_score_template', course_id=course.id) }}">下载本课程成绩模板</a>
+            </div>
+            {% set source_tags = [{'kind': 'direct', 'label': '直接读取'}, {'kind': 'manual', 'label': '导入校验'}] %}
+            {% set source_text = '本页展示的文件名、工作表、字段映射和异常条数都直接来自你上传的成绩文件与导入日志，不属于 AI 生成内容。' %}
+            {% include "partials/source_note.html" %}
+            <div class="tip-panel mb-4">
+                <strong>推荐使用系统模板</strong>
+                <p class="mb-0">模板只保留学号、姓名、班级以及各课程目标下的分项得分列；如果一门课有两个班，可以在文件选择窗口中同时选中两个成绩文件，系统会合并入库后统一计算。</p>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">{{ form.semester.label(class="form-label") }}{{ form.semester(class="form-control") }}</div>
+                <div class="mb-3">{{ form.class_scope.label(class="form-label") }}{{ form.class_scope(class="form-control", placeholder="可留空，系统按文件中的班级字段入库") }}</div>
+                <div class="mb-4">{{ form.file.label(class="form-label") }}{{ form.file(class="form-control", multiple=True) }}</div>
+                {{ form.submit(class="btn btn-dark w-100") }}
+            </form>
+            <div class="tip-panel mt-4">
+                <strong>当前课程学生数</strong>
+                <p class="mb-0">{{ course.student_count or 0 }} 人</p>
+            </div>
+            <div class="create-note mt-3">
+                <span>流程说明</span>
+                <strong>成绩导入成功后，下一步请进入“03 计算分析”手动执行第四章计算；系统不会把“导入文件”和“展示分析结果”混成同一步。</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="panel-card reveal">
+            <div class="section-head">
+                <div>
+                    <h2>字段识别说明</h2>
+                    <p>左侧上传成绩表后，系统会自动识别工作表、映射列名，并兼容标准成绩表与按课程目标拆分的 xlsm 工作簿。</p>
+                </div>
+                <span class="soft-badge">自动识别列名与工作表</span>
+            </div>
+            <div class="stack-grid mb-4">
+                <article class="simple-card">
+                    <strong>标准成绩表</strong>
+                    <p class="mb-0">包含学号、姓名、班级以及课后作业、大作业、随堂测试、期末考试、上机实践等列，系统会自动按课程目标权重拆分计算。</p>
+                </article>
+                <article class="simple-card">
+                    <strong>推荐简化模板</strong>
+                    <p class="mb-0">点击“下载成绩模板”后，系统会按当前课程目标与考核权重生成一个单工作表 xlsx。老师只填第7行开始的学生信息和分项得分即可。</p>
+                </article>
+            </div>
+            <div class="table-responsive">
+                <table class="table modern-table align-middle">
+                    <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>说明</th>
+                        <th>当前课程分值 / 常见别名</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr><td>学号</td><td>学生唯一标识</td><td>student_no、student_id</td></tr>
+                    <tr><td>姓名</td><td>学生姓名</td><td>name、学生姓名</td></tr>
+                    <tr><td>班级</td><td>班级名称</td><td>class_name、class</td></tr>
+                    {% for item in assessments %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>当前课程考核项</td>
+                        <td>分值 {{ item.total_score }} / 
+                            {% if item.name == '课后作业' %}平时作业、作业
+                            {% elif item.name == '大作业' %}项目作业、课程设计
+                            {% elif item.name == '随堂测试' %}课堂测试、小测
+                            {% elif item.name == '期末考试' %}考试、期末
+                            {% elif item.name == '上机实践' %}实验、上机、实践
+                            {% else %}可按当前列名直接识别{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="tip-text mb-0">推荐优先使用本页生成的 xlsx 模板；系统仍兼容原始 xls/xlsx/xlsm 成绩工作簿和旧版标准成绩表。</p>
+        </div>
+        <div class="panel-card mt-4 reveal">
+            <div class="section-head">
+                <div>
+                    <h2>最近导入批次</h2>
+                    <p>记录来源文件、工作表、列映射和异常条数，便于追踪数据导入过程。</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table modern-table align-middle">
+                    <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>文件</th>
+                        <th>工作表</th>
+                        <th>导入数</th>
+                        <th>异常数</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for item in recent_imports %}
+                    <tr>
+                        <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ item.filename }}</td>
+                        <td>{{ item.source_sheet or '-' }}</td>
+                        <td>{{ item.imported_count }}</td>
+                        <td>{{ item.issue_count }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">当前还没有导入记录。</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% if latest_import_detail %}
+        <div class="panel-card mt-4 reveal">
+            <div class="section-head">
+                <div>
+                    <h2>最近一次导入反馈</h2>
+                    <p>展示最新导入批次的字段映射结果与异常摘要，便于快速定位问题。</p>
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4"><div class="simple-card h-100"><strong>来源文件</strong><p class="mb-0">{{ latest_import_detail.filename }}</p></div></div>
+                <div class="col-md-4"><div class="simple-card h-100"><strong>工作表</strong><p class="mb-0">{{ latest_import_detail.sheet }}</p></div></div>
+                <div class="col-md-4"><div class="simple-card h-100"><strong>处理结果</strong><p class="mb-0">导入 {{ latest_import_detail.imported_count }} 条，异常 {{ latest_import_detail.issue_count }} 条</p></div></div>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="minor-title">字段映射</h3>
+                    <ul class="plain-list">
+                        {% for source, target in latest_import_detail.mapping.items() %}
+                        <li>{{ source }} → {{ target }}</li>
+                        {% else %}
+                        <li>暂无字段映射记录。</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="minor-title">异常摘要</h3>
+                    <ul class="plain-list">
+                        {% for issue in latest_import_detail.issues[:8] %}
+                        <li>{{ issue }}</li>
+                        {% else %}
+                        <li>最近一次导入未发现异常。</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

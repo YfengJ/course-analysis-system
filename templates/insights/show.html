@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = 'AI评价与改进' %}
+{% set intro_title = course.name %}
+{% set intro_text = '基于第四章统计数据、课程目标与教学大纲，显式生成并保存第五章的课程评价结果分析与持续改进措施。' %}
+{% set intro_meta = [semester, class_scope, '学生人数 ' ~ summary.student_count, ('状态 已生成' if insight_payload else '状态 待生成' if analysis_ready else '状态 待先计算第四章')] %}
+{% set intro_actions = [
+    {'href': url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '返回分析页', 'class': 'btn-outline-dark'},
+    {'href': url_for('report.preview', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '查看报告', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'insights' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="panel-card mt-4 mb-4 reveal">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-4">{{ form.semester.label(class="form-label") }}{{ form.semester(class="form-select") }}</div>
+        <div class="col-md-4">{{ form.class_scope.label(class="form-label") }}{{ form.class_scope(class="form-select") }}</div>
+        <div class="col-md-4 d-flex gap-2">
+            {{ form.submit(class="btn btn-outline-dark") }}
+            <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">查看第四章数据</a>
+        </div>
+    </form>
+</div>
+
+{% if not has_analysis_data %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>当前范围下还没有可用于生成的分析数据</h3>
+        <p>只有在已经完成成绩导入并形成第四章统计结果后，系统才能基于课程数据、教学大纲与目标描述生成第五章内容。</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-dark">去导入成绩</a>
+            <a href="{{ url_for('analysis.index', course_id=course.id) }}" class="btn btn-outline-dark">返回分析页</a>
+        </div>
+    </div>
+</div>
+{% elif not analysis_ready %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>请先完成第四章计算</h3>
+        <p>第五章 AI 分析必须建立在已经算出的第四章数据之上。当前课程虽然已有成绩数据，但还没有执行“03 计算分析”。</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">先去计算第四章</a>
+            <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-outline-dark">返回成绩导入</a>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row g-4 mb-4 reveal">
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid"><span>课程总定量达成度</span><strong>{{ "%.2f"|format(summary.total_quantitative_attainment) }}</strong></div></div>
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid"><span>课程总定性达成度</span><strong>{{ "%.2f"|format(summary.total_qualitative_attainment) }}</strong></div></div>
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid"><span>课程期望值</span><strong>{{ "%.2f"|format(course.expected_value) }}</strong></div></div>
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid {{ 'metric-ok' if insight_payload else 'metric-warn' }}"><span>生成状态</span><strong>{{ '已生成' if insight_payload else '尚未生成' }}</strong></div></div>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>生成控制台</h2><p>仅在你显式点击按钮后，系统才会调用已配置的大模型生成并覆盖当前课程、学期与班级范围下的第五章内容。</p></div>
+        <div class="section-kicker">{{ '大模型已连接' if llm_ready else '大模型未配置' }}</div>
+    </div>
+    {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': 'AI 生成'}] %}
+    {% set source_text = '本页生成时会读取已经计算好的第四章数据，再结合教学大纲和课程目标描述，让 AI 生成第五章分析与改进措施。' %}
+    {% include "partials/source_note.html" %}
+    <div class="insight-grid">
+        <div class="insight-tile">
+            <span>当前范围</span>
+            <strong>{{ semester }}</strong>
+            <small>{{ class_scope }}</small>
+        </div>
+        <div class="insight-tile">
+            <span>学生样本</span>
+            <strong>{{ summary.student_count }}</strong>
+            <small>用于第五章生成</small>
+        </div>
+        <div class="insight-tile">
+            <span>最近生成时间</span>
+            <strong>{% if insight_payload %}{{ insight_payload.generated_at.strftime('%Y-%m-%d %H:%M') }}{% else %}未生成{% endif %}</strong>
+            <small>{% if insight_payload %}{{ insight_payload.provider }} / {{ insight_payload.model_name }}{% else %}等待生成{% endif %}</small>
+        </div>
+        <div class="insight-tile accent">
+            <span>报告联动</span>
+            <strong>{% if insight_payload %}可写入报告{% else %}报告第五章为空状态{% endif %}</strong>
+            <small>{% if insight_payload %}报告页与导出 Word 将直接复用此结果{% else %}请先在本页生成后再查看正式报告{% endif %}</small>
+        </div>
+    </div>
+    <form method="post" class="mt-4 d-flex gap-2 flex-wrap">
+        <input type="hidden" name="semester" value="{{ semester }}">
+        <input type="hidden" name="class_scope" value="{{ class_scope }}">
+        <button type="submit" class="btn btn-dark">{{ '重新生成并覆盖当前结果' if insight_payload else '生成评价结果分析与持续改进措施' }}</button>
+        <a href="{{ url_for('report.preview', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">查看报告预览</a>
+    </form>
+    {% if not llm_ready %}
+    <div class="create-note">
+        <span>配置提醒</span>
+        <strong>当前尚未检测到大模型配置。请先设置 `LLM_API_KEY`，系统才会实际调用模型生成内容。</strong>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row g-4 mb-4 reveal">
+    <div class="col-xl-8">
+        <div class="panel-card h-100 chart-spotlight">
+            <div class="section-head">
+                <div><h2>课程目标达成度对比</h2><p>第五章生成时会同时参考定量达成度、定性达成度与期望值。</p></div>
+            </div>
+            <div id="insightObjectiveBar" class="chart-box"></div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="panel-card h-100 compact-chart-card">
+            <div class="section-head">
+                <div><h2>考核环节表现</h2><p>模型会重点参考相对薄弱的考核环节来提出改进措施。</p></div>
+            </div>
+            <div id="insightAssessmentBar" class="chart-box chart-box-short"></div>
+        </div>
+    </div>
+</div>
+
+{% if not insight_payload %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>第五章尚未生成</h3>
+        <p>当前课程在 {{ semester }} / {{ class_scope }} 范围下还没有保存的“评价结果分析与持续改进措施”。点击上方按钮后，系统会结合第四章数据、课程目标和教学大纲生成并保存最新内容。</p>
+    </div>
+</div>
+{% else %}
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>整体评价分析</h2><p>这是写入报告第五章“课程目标达成情况分析”的总体结论。</p></div>
+        <div class="section-kicker">{{ insight_payload.provider }} / {{ insight_payload.model_name }}</div>
+    </div>
+    <div class="tip-panel ai-overview-panel">
+        {% for paragraph in insight_payload.overview_text.split('\n') if paragraph.strip() %}
+            <p class="mb-3">{{ paragraph }}</p>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="row g-4 mb-4 reveal">
+    {% for item in insight_payload.objective_analyses %}
+    <div class="col-xl-4 col-md-6">
+        <div class="panel-card h-100 objective-ai-card">
+            <div class="section-head">
+                <div>
+                    <h2>{{ item.objective_title }}</h2>
+                    <p>{{ item.focus_label }}</p>
+                </div>
+                <div class="soft-badge">目标分析</div>
+            </div>
+            <p class="mb-3">{{ item.analysis }}</p>
+            <ul class="plain-list ai-evidence-list">
+                {% for evidence in item.evidence %}
+                    <li>{{ evidence }}</li>
+                {% endfor %}
+            </ul>
+            {% if item.teaching_suggestion %}
+            <div class="create-note mt-3">
+                <span>后续关注点</span>
+                <strong>{{ item.teaching_suggestion }}</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="panel-card reveal">
+    <div class="section-head">
+        <div><h2>持续改进措施</h2><p>系统保存的是结构化措施，报告页会读取同一份内容，当前页面则以更易读的卡片形式展示。</p></div>
+    </div>
+    <div class="row g-4">
+        {% for item in insight_payload.improvement_actions %}
+        <div class="col-lg-6">
+            {% set priority_class = 'high' if item.priority == '高' else 'low' if item.priority == '低' else 'mid' %}
+            <article class="simple-card improvement-action-card h-100">
+                <div class="improvement-card-top">
+                    <strong>{{ item.title }}</strong>
+                    <span class="priority-pill priority-{{ priority_class }}">{{ item.priority }}优先级</span>
+                </div>
+                {% if item.related_objective %}
+                <p class="mb-2 text-muted">关联目标：{{ item.related_objective }}</p>
+                {% endif %}
+                {% if item.problem %}
+                <p><strong>问题定位：</strong>{{ item.problem }}</p>
+                {% endif %}
+                <p><strong>改进动作：</strong>{{ item.action }}</p>
+                {% if item.expected_effect %}
+                <p class="mb-0"><strong>预期效果：</strong>{{ item.expected_effect }}</p>
+                {% endif %}
+            </article>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if analysis_ready %}
+<script>
+const insightCharts = {{ charts|tojson }};
+renderObjectiveBar("insightObjectiveBar", insightCharts.objective_bar);
+renderAssessmentBar("insightAssessmentBar", insightCharts.assessment_bar);
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block content %}
+{% set summary = report_context.summary %}
+{% set eyebrow = '报告预览' %}
+{% set intro_title = course.name %}
+{% set intro_text = '查看课程分析报告，并区分每一章的数据来源、规则计算结果和 AI 生成内容。' %}
+{% set has_report_data = report_context.analysis_ready and summary.student_count > 0 %}
+{% set intro_meta = [semester, class_scope, ('定量达成度 ' ~ "%.2f"|format(summary.total_quantitative_attainment)) if has_report_data else '定量达成度 待计算', ('结果 ' ~ summary.total_status) if has_report_data else '状态 待先计算第四章'] %}
+{% set intro_actions = [
+    {'href': url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '返回分析页', 'class': 'btn-outline-dark'},
+    {'href': url_for('report.export_word', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '导出 Word', 'class': 'btn-dark'} if has_report_data else {'href': url_for('importer.import_scores', course_id=course.id), 'label': '先导入成绩', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'reports' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="panel-card compact-action-bar my-4 reveal">
+    <div>
+        <strong>当前输出</strong>
+        <p class="mb-0">{{ '支持导出 Word，并可使用浏览器打印为 PDF。' if has_report_data else '当前统计范围下尚无成绩数据，报告预览暂以引导信息为主。' }}</p>
+    </div>
+    <div class="headline-actions">
+        {% if has_report_data %}
+        <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">去生成第五章</a>
+        <button class="btn btn-outline-dark" onclick="window.print()">打印为 PDF</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>本报告数据来源说明</h2><p>下面每章分别对应“文件读取”“系统规则计算”和“AI 生成”三种来源，答辩时可以直接按这个口径介绍。</p></div>
+    </div>
+    <div class="source-legend-grid">
+        <div class="simple-card">
+            <div class="source-badges">
+                <span class="source-badge source-direct">直接读取</span>
+                <span class="source-badge source-manual">配置回填</span>
+            </div>
+            <p class="mb-0">课程基本信息、教学大纲解析结果、成绩文件、课程目标文本和考核项名称来自上传文件或课程配置。</p>
+        </div>
+        <div class="simple-card">
+            <div class="source-badges">
+                <span class="source-badge source-computed">规则计算</span>
+            </div>
+            <p class="mb-0">第四章里的达成度、均值、中位数、区间分布、达标人数、总评状态等，都由系统按照公式自动计算。</p>
+        </div>
+        <div class="simple-card">
+            <div class="source-badges">
+                <span class="source-badge source-ai">AI 生成</span>
+            </div>
+            <p class="mb-0">第五章的分析与改进措施由 AI 生成，但它必须建立在已经算好的第四章数据和教学大纲内容之上。</p>
+        </div>
+    </div>
+</div>
+
+{% if not report_context.analysis_ready %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>还没有执行第四章计算</h3>
+        <p>当前课程虽然可能已经导入了成绩，但正式报告预览要以第四章计算结果为基础。请先进入“03 计算分析”页面手动完成计算。</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">先去计算第四章</a>
+            <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-outline-dark">返回成绩导入</a>
+        </div>
+    </div>
+</div>
+{% elif not has_report_data %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>当前还没有可生成报告的分析数据</h3>
+        <p>请先完成成绩导入，并在分析页生成有效结果后，再回到这里查看和导出课程报告。</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-dark">去导入成绩</a>
+            <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">返回分析页</a>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="report-layout reveal">
+    <div class="report-paper elevated-report">
+        <div class="report-header">
+            <span>课程目标达成度分析及持续改进报告</span>
+            <h2>{{ course.name }}</h2>
+            <p>{{ course.code }} / {{ semester }} / {{ class_scope }}</p>
+        </div>
+
+        <h3>一、课程基本信息</h3>
+        {% set source_tags = [{'kind': 'direct', 'label': '课程配置'}, {'kind': 'manual', 'label': '大纲回填'}] %}
+        {% set source_text = '这一章主要来自课程基础信息与教学大纲解析回填结果，只有统计范围和人数是根据当前查询条件补上的。' %}
+        {% include "partials/source_note.html" %}
+        <table class="table modern-table report-table">
+            <tr><th>课程名称</th><td>{{ course.name }}</td><th>课程编号</th><td>{{ course.code }}</td></tr>
+            <tr><th>课程性质</th><td>{{ course.nature or '未设置' }}</td><th>课程类别</th><td>{{ course.category or '未设置' }}</td></tr>
+            <tr><th>课程负责人</th><td>{{ course.course_owner or '未设置' }}</td><th>考核方式</th><td>{{ course.assessment_method }}</td></tr>
+            <tr><th>学时/学分</th><td>{{ course.hours }}/{{ course.credits }}</td><th>开课学期</th><td>{{ semester }}</td></tr>
+            <tr><th>期望值</th><td>{{ "%.2f"|format(course.expected_value) }}</td><th>统计范围</th><td>{{ class_scope }} / {{ summary.student_count }}人</td></tr>
+        </table>
+
+        <h3>二、课程目标与毕业要求指标点的对应关系</h3>
+        {% set source_tags = [{'kind': 'manual', 'label': '课程目标配置'}, {'kind': 'direct', 'label': '教学大纲支撑关系'}] %}
+        {% set source_text = '本章显示的是课程目标文本、指标点和支撑强度配置，本质上属于配置数据，不是系统临时算出来的。' %}
+        {% include "partials/source_note.html" %}
+        <table class="table modern-table report-table">
+            <thead>
+            <tr><th>课程目标</th><th>目标描述</th><th>指标点</th><th>支撑强度</th></tr>
+            </thead>
+            <tbody>
+            {% for item in course.objectives|sort(attribute='sequence') %}
+                {% for mapping in item.requirement_maps %}
+                <tr>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.description }}</td>
+                    <td>{{ mapping.requirement.indicator_point }}</td>
+                    <td>{{ mapping.support_strength }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.description }}</td>
+                    <td>暂未配置</td>
+                    <td>-</td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <h3>三、支撑指标点的课程目标考核分布</h3>
+        {% set source_tags = [{'kind': 'manual', 'label': '目标权重配置'}] %}
+        {% set source_text = '这一章展示的是课程目标与考核项的映射和权重，属于课程建模配置结果，用来支撑后面的第四章计算。' %}
+        {% include "partials/source_note.html" %}
+        <p class="report-subtitle">（一）课程目标与考核方式对应关系</p>
+        <p class="report-note">（说明：评价方式包括课堂表现、上机实践、结题报告等）</p>
+        <table class="table modern-table report-table">
+            <thead>
+            <tr><th>课程目标</th><th>考核方式分布</th><th>目标权重</th></tr>
+            </thead>
+            <tbody>
+            {% for item in summary.objective_results %}
+            <tr>
+                <td>{{ item.objective_title }}</td>
+                <td>
+                    {% for detail in item.assessment_details %}
+                        {{ detail.assessment_name }} {{ detail.target_score }}分{% if not loop.last %}，{% endif %}
+                    {% endfor %}
+                </td>
+                <td>{{ "%.0f"|format(item.objective_weight) }}%</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <h3>四、课程目标达成度评价</h3>
+        {% set source_tags = [{'kind': 'direct', 'label': '成绩文件'}, {'kind': 'manual', 'label': '权重配置'}, {'kind': 'computed', 'label': '规则计算'}] %}
+        {% set source_text = '第四章是整个系统的核心计算部分：原始成绩来自成绩文件，目标权重来自课程配置，页面上的达成度和统计表都由系统后台公式自动计算。' %}
+        {% include "partials/source_note.html" %}
+        <p class="report-subtitle">（一）课程教学目标达成情况定量评价</p>
+        <table class="table modern-table report-table">
+            <thead>
+            <tr>
+                <th>课程目标</th>
+                <th>评价方式</th>
+                <th>比例</th>
+                <th>目标分值</th>
+                <th>实际平均分</th>
+                <th>分目标权重</th>
+                <th>目标达成度</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in summary.chapter_four.quantitative_rows %}
+            <tr>
+                <td>{{ item.objective_title }}</td>
+                <td>{{ item.assessment_name }}</td>
+                <td>{{ item.percentage_label|replace('.0', '') }}</td>
+                <td>{{ "%.0f"|format(item.target_score) if item.target_score == item.target_score|round(0) else "%.2f"|format(item.target_score) }}</td>
+                <td>{{ "%.1f"|format(item.actual_average_score) }}</td>
+                <td>{{ "%.0f"|format(item.objective_weight) }}</td>
+                <td>{{ "%.2f"|format(item.objective_attainment) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="report-subtitle mt-4">（二）课程教学目标达成情况定性评价</p>
+        <p class="report-note">优、良、中、差分别赋分90、80、70、60，得分率为每个课程目标的加权平均值。</p>
+        <table class="table modern-table report-table">
+            <thead>
+            <tr><th>课程目标</th><th>问题能力</th><th>优</th><th>良</th><th>中</th><th>差</th><th>得分率</th><th>达成度</th></tr>
+            </thead>
+            <tbody>
+            {% for item in summary.chapter_four.qualitative_rows %}
+            <tr>
+                <td>{{ item.objective_title }}</td>
+                {% if item.objective_title == '课程总目标计算' %}
+                <td>课程总目标计算</td>
+                <td>课程总目标计算</td>
+                <td>课程总目标计算</td>
+                <td>课程总目标计算</td>
+                <td>课程总目标计算</td>
+                <td>课程总目标计算</td>
+                {% else %}
+                <td>{{ item.question_ability }}</td>
+                <td>{{ item.excellent_count }}</td>
+                <td>{{ item.good_count }}</td>
+                <td>{{ item.medium_count }}</td>
+                <td>{{ item.poor_count }}</td>
+                <td>{% if item.score_rate is number %}{{ "%.1f"|format(item.score_rate) }}{% else %}{{ item.score_rate }}{% endif %}</td>
+                {% endif %}
+                <td>{{ "%.2f"|format(item.attainment) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p>{{ summary.chapter_four.qualitative_formula }}</p>
+
+        {% if report_context.chapter_five_ready %}
+        <h3>五、评价结果分析与持续改进措施</h3>
+        {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': 'AI 生成'}] %}
+        {% set source_text = '第五章文字内容不是固定模板，而是系统读取第四章计算结果和教学大纲信息后，由 AI 生成并保存的结构化分析。' %}
+        {% include "partials/source_note.html" %}
+        <p class="report-subtitle">（一）课程目标达成情况分析</p>
+        <p>{{ report_context.generated_insight.overview_text }}</p>
+        <ul class="plain-list">
+            {% for item in report_context.generated_insight.objective_analyses %}
+            <li>
+                <div>
+                    <strong>{{ item.objective_title }}</strong>
+                    <p class="mb-2">{{ item.analysis }}</p>
+                    {% if item.evidence %}
+                    <p class="mb-0 text-muted">证据：{{ item.evidence|join('；') }}</p>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="report-subtitle mt-4">（二）改进措施</p>
+        <p>针对以上分析存在的问题，提出以下几点改进措施：</p>
+        <ol class="plain-list ordered">
+            {% for item in report_context.generated_insight.improvement_actions %}
+            <li>
+                <strong>{{ item.title }}</strong>
+                {% if item.related_objective %}<div>关联目标：{{ item.related_objective }}</div>{% endif %}
+                {% if item.problem %}<div>问题定位：{{ item.problem }}</div>{% endif %}
+                <div>改进动作：{{ item.action }}</div>
+                {% if item.expected_effect %}<div>预期效果：{{ item.expected_effect }}</div>{% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+        {% else %}
+        <div class="empty-panel">
+            <h3>第五章尚未生成</h3>
+            <p>当前课程在 {{ semester }} / {{ class_scope }} 范围下还没有保存的 AI 评价结果分析与持续改进措施，因此报告中暂不写入正式第五章内容。</p>
+            <div class="d-flex gap-2 justify-content-center flex-wrap">
+                <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">去生成第五章</a>
+                <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">返回分析页</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <h3>{{ '六、其它相关说明' if report_context.chapter_five_ready else '五、其它相关说明' }}</h3>
+        <p>无。</p>
+
+        <h3>{{ '七、审核意见' if report_context.chapter_five_ready else '六、审核意见' }}</h3>
+        <p>教研室审核意见：_______________________________________</p>
+        <p>院系领导审核意见：_____________________________________</p>
+    </div>
+
+    <aside class="report-side">
+        <div class="panel-card report-summary-card">
+            <h2 class="mb-3">报告摘要</h2>
+            <div class="mini-stats">
+                <div><span>定量达成度</span><strong>{{ "%.2f"|format(summary.total_quantitative_attainment) }}</strong></div>
+                <div><span>定性达成度</span><strong>{{ "%.2f"|format(summary.total_qualitative_attainment) }}</strong></div>
+                <div><span>结果状态</span><strong>{{ summary.total_status }}</strong></div>
+                <div><span>学生人数</span><strong>{{ summary.student_count }}</strong></div>
+            </div>
+        </div>
+        <div class="panel-card">
+            <h2 class="mb-3">数据来源概览</h2>
+            <ul class="plain-list">
+                <li>课程负责人：{{ course.course_owner or '未设置' }}</li>
+                <li>教学大纲：{{ report_context.latest_outline.filename if report_context.latest_outline else '未上传' }}</li>
+                <li>成绩文件：{{ report_context.latest_import.filename if report_context.latest_import else '未导入' }}</li>
+                <li>统计范围：{{ class_scope }}</li>
+                <li>分析学期：{{ semester }}</li>
+            </ul>
+        </div>
+        <div class="panel-card">
+            <h2 class="mb-3">第四章摘要</h2>
+            <div class="stack-grid">
+                <article class="simple-card">
+                    <strong>定量汇总</strong>
+                    <p class="mb-0">课程总定量达成度 {{ "%.2f"|format(summary.total_quantitative_attainment) }}，百分制 {{ "%.2f"|format(summary.total_quantitative_attainment_percent) }}。</p>
+                </article>
+                <article class="simple-card">
+                    <strong>定性汇总</strong>
+                    <p class="mb-0">课程总定性达成度 {{ "%.2f"|format(summary.total_qualitative_attainment) }}，得分率 {{ "%.1f"|format(summary.total_qualitative_score_percent) }}。</p>
+                </article>
+            </div>
+        </div>
+        <div class="panel-card">
+            <h2 class="mb-3">模板样式说明</h2>
+            <p class="mb-0">导出 Word 时，系统会按学校模板方向统一标题、正文字体、页边距和封面层级，减少与标准模板的样式差距。</p>
+        </div>
+        <div class="panel-card">
+            <h2 class="mb-3">历史记录</h2>
+            <ul class="plain-list">
+                {% for item in recent_reports %}
+                <li>{{ item.created_at.strftime('%Y-%m-%d') }} / {{ item.class_scope }} / {{ "%.2f"|format(item.quantitative_attainment) }}</li>
+                {% else %}
+                <li>暂无历史报告记录。</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </aside>
+</div>
+{% endif %}
+{% endblock %}

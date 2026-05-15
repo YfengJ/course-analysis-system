@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '系统使用说明' %}
+{% set intro_title = '使用流程与操作提示' %}
+{% set intro_text = '按照课程建立、数据导入、结果分析和报告生成的顺序完成整套业务流程。' %}
+{% set intro_meta = ['标准流程 5 步', '输入数据 3 类', '输出结果 2 类'] %}
+{% set intro_actions = [
+    {'href': url_for('dashboard.index'), 'label': '返回首页', 'class': 'btn-outline-dark'},
+    {'href': url_for('course.create_course'), 'label': '开始创建课程', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+<section class="workflow-band workflow-band-strong reveal">
+    <div class="section-head">
+        <div>
+            <h2>系统使用流程</h2>
+            <p>围绕课程数据接入、达成度计算和报告生成组织完整分析流程。</p>
+        </div>
+    </div>
+    <div class="workflow-steps">
+        <div class="workflow-step current"><span>01</span><strong>新建课程</strong><small>建立课程骨架与目标权重框架</small></div>
+        <div class="workflow-step"><span>02</span><strong>上传教学大纲</strong><small>解析课程信息、目标与支撑关系</small></div>
+        <div class="workflow-step"><span>03</span><strong>导入成绩文件</strong><small>识别成绩列并完成数据校验</small></div>
+        <div class="workflow-step"><span>04</span><strong>自动计算分析</strong><small>输出定量、定性和区间分布结果</small></div>
+        <div class="workflow-step"><span>05</span><strong>生成标准报告</strong><small>导出 Word 报告并支持 PDF 打印</small></div>
+    </div>
+</section>
+
+<div class="row g-4 mt-4">
+    <div class="col-lg-4 reveal">
+        <div class="panel-card h-100">
+            <h2 class="mb-3">使用前准备</h2>
+            <ul class="plain-list">
+                <li>先创建课程并补充课程基础信息。</li>
+                <li>准备教学大纲文档和成绩文件。</li>
+                <li>确认课程目标和考核项配置完整。</li>
+            </ul>
+        </div>
+    </div>
+    <div class="col-lg-4 reveal">
+        <div class="panel-card h-100">
+            <h2 class="mb-3">分析过程中</h2>
+            <ul class="plain-list">
+                <li>上传教学大纲后检查课程目标与支撑关系。</li>
+                <li>导入成绩后查看导入批次与异常信息。</li>
+                <li>进入分析页查看课程目标达成情况与改进建议。</li>
+            </ul>
+        </div>
+    </div>
+    <div class="col-lg-4 reveal">
+        <div class="panel-card h-100">
+            <h2 class="mb-3">结果输出</h2>
+            <ul class="plain-list">
+                <li>可在报告页预览课程分析结果。</li>
+                <li>支持导出 Word 报告和打印为 PDF。</li>
+                <li>历史报告会在首页自动保留记录。</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

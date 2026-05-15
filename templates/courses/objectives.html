@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '课程目标配置' %}
+{% set intro_title = course.name %}
+{% set intro_text = '这是手动配置入口：仅当暂时不上传教学大纲，或需要人工补充课程目标时使用。' %}
+{% set intro_meta = ['目标数量 ' ~ objectives|length, '课程编号 ' ~ course.code, '学期 ' ~ (course.semester or '未设置学期')] %}
+{% set intro_actions = [
+    {'href': url_for('course.detail', course_id=course.id), 'label': '返回课程', 'class': 'btn-outline-dark'},
+    {'href': url_for('course.show_outline', course_id=course.id), 'label': '查看教学大纲', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'objectives' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="row g-4 mt-1">
+    <div class="col-xl-8">
+        <div class="panel-card">
+            <div class="section-head">
+                <div>
+                    <h2>课程目标列表</h2>
+                    <p>如果教学大纲已上传，系统通常会自动回填课程目标标题和描述；这页主要用于手工兜底和补充。</p>
+                </div>
+            </div>
+            {% set source_tags = [{'kind': 'manual', 'label': '手动维护'}, {'kind': 'direct', 'label': '大纲回填'}] %}
+            {% set source_text = '本页不是主流程必经步骤。上传教学大纲后，课程目标往往会自动补齐；只有未导入大纲或需要人工修正时，才建议在这里手动维护。' %}
+            {% include "partials/source_note.html" %}
+            <div class="stack-grid">
+                {% for item in objectives %}
+                <article class="objective-card">
+                    <div class="objective-head">
+                        <div>
+                            <h3>{{ item.title }}</h3>
+                            <p>{{ item.description }}</p>
+                        </div>
+                        <div class="weight-badge">{{ "%.0f"|format(item.weight) }}%</div>
+                    </div>
+                    <div class="objective-meta">
+                        <div>
+                            <span>毕业要求映射</span>
+                            <strong>
+                                {% for mapping in item.requirement_maps %}
+                                    {{ mapping.requirement.indicator_point }}({{ mapping.support_strength }}){% if not loop.last %}，{% endif %}
+                                {% else %}
+                                    暂未配置
+                                {% endfor %}
+                            </strong>
+                        </div>
+                        <div>
+                            <span>考核方式</span>
+                            <strong>
+                                {% for aw in item.assessment_weights %}
+                                    {{ aw.assessment.name }} {{ aw.weight_score }}分{% if not loop.last %}，{% endif %}
+                                {% else %}
+                                    暂未配置
+                                {% endfor %}
+                            </strong>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="panel-card">
+            <h2 class="mb-3">新增课程目标</h2>
+            <form method="post">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">{{ form.title.label(class="form-label") }}{{ form.title(class="form-control") }}</div>
+                <div class="mb-3">{{ form.description.label(class="form-label") }}{{ form.description(class="form-control", rows="5") }}</div>
+                <div class="mb-3">{{ form.weight.label(class="form-label") }}{{ form.weight(class="form-control") }}</div>
+                {{ form.submit(class="btn btn-dark w-100") }}
+            </form>
+            <p class="tip-text mt-3 mb-0">新建课程已自动生成 3 个默认目标骨架。若上传教学大纲，系统会优先更新已有目标文本。</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

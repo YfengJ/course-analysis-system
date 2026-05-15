@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '达成度分析' %}
+{% set intro_title = course.name %}
+{% set intro_text = '这一步专门负责第四章计算与展示，和“成绩导入”分开处理。' %}
+{% set intro_meta = [summary.semester, summary.class_scope, '学生人数 ' ~ summary.student_count, ('判定 ' ~ summary.total_status) if has_analysis_result else '状态 待计算'] %}
+{% set intro_actions = [
+    {'href': url_for('course.detail', course_id=course.id), 'label': '返回课程', 'class': 'btn-outline-dark'},
+    {'href': url_for('report.preview', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope), 'label': '查看报告', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'analysis' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="panel-card mt-4 mb-4 reveal">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-4">{{ form.semester.label(class="form-label") }}{{ form.semester(class="form-select") }}</div>
+        <div class="col-md-4">{{ form.class_scope.label(class="form-label") }}{{ form.class_scope(class="form-select") }}</div>
+        <div class="col-md-4 d-flex gap-2">
+            {{ form.submit(class="btn btn-dark") }}
+            <a href="{{ url_for('report.preview', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-outline-dark">查看报告</a>
+        </div>
+    </form>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>本页数据说明</h2><p>直接说明：哪些是文件直接读取，哪些是系统规则计算，哪些是 AI 生成。</p></div>
+    </div>
+    <div class="source-legend-grid">
+        <div class="simple-card">
+            <div class="source-badges">
+                <span class="source-badge source-direct">直接读取</span>
+                <span class="source-badge source-manual">配置回填</span>
+            </div>
+            <p class="mb-0">课程名称、教学大纲解析结果、成绩文件原始分数、班级和学号等，来自上传文件或课程基础配置。</p>
+        </div>
+        <div class="simple-card">
+            <div class="source-badges">
+                <span class="source-badge source-computed">规则计算</span>
+            </div>
+            <p class="mb-0">定量达成度、定性达成度、区间分布、均值、中位数、达标人数、薄弱考核环节等，全部由系统后台按权重公式计算。</p>
+        </div>
+        <div class="simple-card">
+            <div class="source-badges">
+                <span class="source-badge source-ai">AI 生成</span>
+            </div>
+            <p class="mb-0">只有第五章“评价结果分析与持续改进措施”属于 AI 生成内容，而且必须在 AI 页面手动点击后才会生成。</p>
+        </div>
+    </div>
+</div>
+
+{% if not has_score_data %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>当前还没有可分析的成绩数据</h3>
+        <p>系统已准备好分析结构，但当前学期与班级范围下尚未检测到学生成绩。建议先完成成绩导入，再查看达成度分析结果。</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-dark">去导入成绩</a>
+            <a href="{{ url_for('course.show_outline', course_id=course.id) }}" class="btn btn-outline-dark">查看教学大纲</a>
+        </div>
+    </div>
+</div>
+{% elif not has_analysis_result %}
+<div class="panel-card reveal">
+    <div class="empty-panel">
+        <h3>成绩已导入，尚未执行第四章计算</h3>
+        <p>为了把“导入数据”和“生成分析结果”分开，这里需要你手动点击一次计算按钮。计算完成后，本页才会展示定量、定性、分布和第五章入口。</p>
+        <form method="post" class="d-flex gap-2 justify-content-center flex-wrap mt-4">
+            <input type="hidden" name="semester" value="{{ summary.semester }}">
+            <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">
+            <button type="submit" class="btn btn-dark">开始计算第四章数据</button>
+            <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-outline-dark">返回成绩导入</a>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="row g-4 mb-4 reveal">
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid"><span>课程总定量达成度</span><strong>{{ "%.2f"|format(summary.total_quantitative_attainment) }}</strong></div></div>
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid"><span>课程总定性达成度</span><strong>{{ "%.2f"|format(summary.total_qualitative_attainment) }}</strong></div></div>
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid"><span>课程期望值</span><strong>{{ "%.2f"|format(course.expected_value) }}</strong></div></div>
+    <div class="col-xl-3 col-md-6"><div class="metric-card solid {{ 'metric-ok' if summary.total_status == '达成' else 'metric-warn' }}"><span>判定结果</span><strong>{{ summary.total_status }}</strong></div></div>
+</div>
+
+{% set source_tags = [{'kind': 'computed', 'label': '规则计算'}] %}
+{% set source_text = '这四个总览指标不是直接从文件里抄出来的，而是系统根据导入成绩、课程目标权重和期望值在后台计算后得到的结果。' %}
+{% include "partials/source_note.html" %}
+
+<div class="analysis-hero-grid mb-4 reveal">
+    <div class="panel-card insight-panel">
+        <div class="section-head">
+            <div><h2>关键结果</h2><p>优先呈现核心结论与支撑证据，便于快速判断课程达成情况。</p></div>
+        </div>
+        <div class="insight-grid">
+            <div class="insight-tile">
+                <span>表现最佳目标</span>
+                <strong>{{ strongest_objective.objective_title if strongest_objective else '暂无' }}</strong>
+                <small>{{ "%.2f"|format(strongest_objective.quantitative_attainment) if strongest_objective else '-' }}</small>
+            </div>
+            <div class="insight-tile">
+                <span>相对薄弱目标</span>
+                <strong>{{ weakest_objective.objective_title if weakest_objective else '暂无' }}</strong>
+                <small>{{ "%.2f"|format(weakest_objective.quantitative_attainment) if weakest_objective else '-' }}</small>
+            </div>
+            <div class="insight-tile">
+                <span>薄弱考核环节</span>
+                <strong>{{ weakest_assessment.assessment_name if weakest_assessment else '暂无' }}</strong>
+                <small>{% if weakest_assessment %}{{ "%.2f"|format(weakest_assessment.score_rate * 100) }}%{% else %}-{% endif %}</small>
+            </div>
+            <div class="insight-tile accent">
+                <span>结论摘要</span>
+                <strong>{{ summary.total_status }}</strong>
+                <small>课程总达成度 {{ "%.2f"|format(summary.total_quantitative_attainment) }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4 reveal">
+    <div class="col-xl-8">
+        <div class="panel-card h-100 chart-spotlight">
+            <div class="section-head">
+                <div><h2>课程目标达成度对比</h2><p>同时呈现定量达成度、定性达成度和期望值。</p></div>
+            </div>
+            <div id="analysisObjectiveBar" class="chart-box"></div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="panel-card h-100 compact-chart-card">
+            <div class="section-head">
+                <div><h2>区间分布统计</h2><p>快速判断学生达成度集中区间。</p></div>
+            </div>
+            <div id="distributionBar" class="chart-box"></div>
+        </div>
+    </div>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>第四章 课程目标达成度评价</h2><p>按照教学大纲中的课程目标与考核分布，结合成绩文件自动计算定量、定性、分布和达成情况。</p></div>
+    </div>
+    {% set source_tags = [{'kind': 'direct', 'label': '成绩文件'}, {'kind': 'manual', 'label': '课程/大纲配置'}, {'kind': 'computed', 'label': '规则计算'}] %}
+    {% set source_text = '第四章的原始输入来自成绩文件与课程目标权重配置；页面上看到的公式、达成度和统计结果，则是系统在后台按既定规则计算出来的。' %}
+    {% include "partials/source_note.html" %}
+    <div class="stack-grid">
+        <article class="simple-card">
+            <strong>定量汇总</strong>
+            <p class="mb-0">{{ summary.chapter_four.quantitative_formula }}</p>
+        </article>
+        <article class="simple-card">
+            <strong>定性汇总</strong>
+            <p class="mb-0">{{ summary.chapter_four.qualitative_formula }}</p>
+        </article>
+    </div>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>（一）课程教学目标达成情况定量评价</h2><p>将各课程目标关联的考核项平均分折算到目标分值后，生成与报告模板一致的定量评价表。</p></div>
+    </div>
+    <div class="table-responsive">
+        <table class="table modern-table align-middle">
+            <thead>
+            <tr>
+                <th>课程目标</th>
+                <th>评价方式</th>
+                <th>比例</th>
+                <th>目标分值</th>
+                <th>实际平均分</th>
+                <th>分目标权重</th>
+                <th>目标达成度</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in summary.chapter_four.quantitative_rows %}
+            <tr>
+                <td>{{ item.objective_title }}</td>
+                <td>{{ item.assessment_name }}</td>
+                <td>{{ item.percentage_label|replace('.0', '') }}</td>
+                <td>{{ "%.0f"|format(item.target_score) if item.target_score == item.target_score|round(0) else "%.2f"|format(item.target_score) }}</td>
+                <td>{{ "%.1f"|format(item.actual_average_score) }}</td>
+                <td>{{ "%.0f"|format(item.objective_weight) }}</td>
+                <td>{{ "%.2f"|format(item.objective_attainment) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-4 mb-4 reveal">
+    <div class="col-lg-6">
+        <div class="panel-card h-100">
+            <div class="section-head">
+                <div><h2>统计特征</h2><p>对应工作簿中的平均值、中位数、标准差、最大值和最小值。</p></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table modern-table align-middle">
+                    <thead>
+                    <tr><th>课程目标</th><th>平均值</th><th>中位数</th><th>标准差</th><th>最大值</th><th>最小值</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for item in summary.chapter_four.statistics_rows %}
+                    <tr>
+                        <td>{{ item.objective_title }}</td>
+                        <td>{{ "%.2f"|format(item.average) }}</td>
+                        <td>{{ "%.2f"|format(item.median) }}</td>
+                        <td>{{ "%.2f"|format(item.stddev) }}</td>
+                        <td>{{ "%.2f"|format(item.max) }}</td>
+                        <td>{{ "%.2f"|format(item.min) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="panel-card h-100">
+            <div class="section-head">
+                <div><h2>课程目标达成情况</h2><p>统计期望值、达成度值、达标人数、未达标人数和超过平均值人数。</p></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table modern-table align-middle">
+                    <thead>
+                    <tr><th>课程目标</th><th>期望值</th><th>达成度值</th><th>达标人数</th><th>未达标人数</th><th>超过平均值人数</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for item in summary.chapter_four.attainment_rows %}
+                    <tr>
+                        <td>{{ item.objective_title }}</td>
+                        <td>{{ "%.0f"|format(item.expected_value) }}</td>
+                        <td>{{ "%.2f"|format(item.attainment_value) }}</td>
+                        <td>{{ item.reached_count }}</td>
+                        <td>{{ item.not_reached_count }}</td>
+                        <td>{{ item.above_average_count }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>（二）课程教学目标达成情况定性评价</h2><p>系统优先采用标准报告模板中已有的优、良、中、差统计；未提供时再按学生课程目标达成率自动划档，并按 90、80、70、60 赋分生成定性达成度。</p></div>
+    </div>
+    <div class="table-responsive">
+        <table class="table modern-table align-middle">
+            <thead>
+            <tr><th>课程目标</th><th>问题能力</th><th>优</th><th>良</th><th>中</th><th>差</th><th>得分率</th><th>达成度</th></tr>
+            </thead>
+            <tbody>
+            {% for item in summary.chapter_four.qualitative_rows %}
+            <tr>
+                <td>{{ item.objective_title }}</td>
+                <td>{{ item.question_ability }}</td>
+                <td>{{ item.excellent_count }}</td>
+                <td>{{ item.good_count }}</td>
+                <td>{{ item.medium_count }}</td>
+                <td>{{ item.poor_count }}</td>
+                <td>{% if item.score_rate is number %}{{ "%.1f"|format(item.score_rate) }}{% else %}{{ item.score_rate }}{% endif %}</td>
+                <td>{{ "%.2f"|format(item.attainment) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-4 mb-4 reveal">
+    <div class="col-xl-7">
+        <div class="panel-card h-100">
+            <div class="section-head">
+                <div><h2>达成度分布统计</h2><p>展示每个课程目标和总目标在各区间的人数与比例。</p></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table modern-table align-middle">
+                    <thead>
+                    <tr><th>课程目标</th><th>90%以上</th><th>80%-89%</th><th>70%-79%</th><th>60%-69%</th><th>60%以下</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for item in summary.chapter_four.distribution_rows %}
+                    <tr>
+                        <td>{{ item.objective_title }}</td>
+                        <td>{{ item.buckets['0.90以上'] }}</td>
+                        <td>{{ item.buckets['0.80-0.89'] }}</td>
+                        <td>{{ item.buckets['0.70-0.79'] }}</td>
+                        <td>{{ item.buckets['0.60-0.69'] }}</td>
+                        <td>{{ item.buckets['0.60以下'] }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="panel-card h-100">
+            <div class="section-head">
+                <div><h2>考核环节表现证据</h2><p>汇总各考核项平均得分率，帮助定位薄弱环节。</p></div>
+            </div>
+            <div id="assessmentBar" class="chart-box chart-box-short"></div>
+        </div>
+    </div>
+</div>
+
+{% set calc = summary.chapter_four.calculation_details %}
+<div class="panel-card mb-4 reveal calculation-panel">
+    <div class="section-head">
+        <div><h2>计算过程说明</h2><p>把本页涉及到的计算结果逐项展开，便于演示时说明“这些数是怎么来的”。</p></div>
+        <div class="section-kicker">规则计算透明化</div>
+    </div>
+    {% set source_tags = [{'kind': 'direct', 'label': '成绩文件'}, {'kind': 'manual', 'label': '权重配置'}, {'kind': 'computed', 'label': '公式计算'}] %}
+    {% set source_text = '下面每一项都对应前面页面中已经展示的计算结果，输入来自成绩文件和课程目标权重，输出由系统按固定规则计算。' %}
+    {% include "partials/source_note.html" %}
+
+    <div class="calculation-overview-grid">
+        {% for item in calc.overview %}
+        <article class="calculation-card">
+            <span>{{ item.title }}</span>
+            <strong>{{ item.result }}</strong>
+            <p>{{ item.formula }}</p>
+            {% for detail in item.details %}
+            <small>{{ detail }}</small>
+            {% endfor %}
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="calculation-section">
+        <h3>1. 定量达成度如何计算</h3>
+        <p>先算每个课程目标下各考核项的实际平均分，再除以该目标对应的目标分值合计，最后按课程目标权重汇总为课程总定量达成度。</p>
+        {% for item in calc.quantitative_steps %}
+        <details class="calculation-step" open>
+            <summary><span>{{ item.title }}</span><strong>{{ item.result }}</strong></summary>
+            <p>{{ item.formula }}</p>
+            <ul class="plain-list">
+                {% for detail in item.details %}
+                <li>{{ detail }}</li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endfor %}
+    </div>
+
+    <div class="calculation-section">
+        <h3>2. 定性达成度如何计算</h3>
+        <p>系统优先采用标准报告模板中已有的优、良、中、差统计；未提供时再按学生课程目标达成率划档，最后按 90、80、70、60 赋分得到每个课程目标的定性达成度。</p>
+        {% for item in calc.qualitative_steps %}
+        <details class="calculation-step">
+            <summary><span>{{ item.title }}</span><strong>{{ item.result }}</strong></summary>
+            <p>{{ item.formula }}</p>
+            <ul class="plain-list">
+                {% for detail in item.details %}
+                <li>{{ detail }}</li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endfor %}
+    </div>
+
+    <div class="calculation-section">
+        <h3>3. 统计特征与达标人数如何计算</h3>
+        <div class="calculation-two-col">
+            <div>
+                <h4>统计特征</h4>
+                {% for item in calc.statistics_steps %}
+                <details class="calculation-step compact">
+                    <summary><span>{{ item.title }}</span><strong>{{ item.result }}</strong></summary>
+                    <p>{{ item.formula }}</p>
+                    <ul class="plain-list">
+                        {% for detail in item.details %}
+                        <li>{{ detail }}</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endfor %}
+            </div>
+            <div>
+                <h4>达标人数</h4>
+                {% for item in calc.attainment_steps %}
+                <details class="calculation-step compact">
+                    <summary><span>{{ item.title }}</span><strong>{{ item.result }}</strong></summary>
+                    <p>{{ item.formula }}</p>
+                    <ul class="plain-list">
+                        {% for detail in item.details %}
+                        <li>{{ detail }}</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="calculation-section">
+        <h3>4. 区间分布和考核环节如何计算</h3>
+        <div class="calculation-two-col">
+            <div>
+                <h4>达成度区间分布</h4>
+                {% for item in calc.distribution_steps %}
+                <details class="calculation-step compact">
+                    <summary><span>{{ item.title }}</span><strong>展开</strong></summary>
+                    <p>{{ item.formula }}</p>
+                    <p class="calculation-result-line">{{ item.result }}</p>
+                    <ul class="plain-list">
+                        {% for detail in item.details %}
+                        <li>{{ detail }}</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endfor %}
+                <details class="calculation-step compact">
+                    <summary><span>{{ calc.total_distribution.title }}</span><strong>展开</strong></summary>
+                    <p>{{ calc.total_distribution.formula }}</p>
+                    <p class="calculation-result-line">{{ calc.total_distribution.result }}</p>
+                    <ul class="plain-list">
+                        {% for detail in calc.total_distribution.details %}
+                        <li>{{ detail }}</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            </div>
+            <div>
+                <h4>考核环节得分率</h4>
+                {% for item in calc.assessment_steps %}
+                <details class="calculation-step compact">
+                    <summary><span>{{ item.title }}</span><strong>{{ item.result }}</strong></summary>
+                    <p>{{ item.formula }}</p>
+                    <ul class="plain-list">
+                        {% for detail in item.details %}
+                        <li>{{ detail }}</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4 reveal">
+    <div class="col-lg-6">
+        <div class="panel-card">
+            <div class="section-head">
+                <div><h2>第五章 AI评价结果分析</h2><p>第五章已改为显式生成模式，避免自动拼接公式化文本。</p></div>
+            </div>
+            {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': 'AI 生成'}] %}
+            {% set source_text = '这里的文字不是固定模板，也不是直接读取文件，而是系统把第四章计算结果、课程目标和教学大纲一起交给大模型后生成的。' %}
+            {% include "partials/source_note.html" %}
+            {% if insight_payload %}
+            <article class="simple-card insight-card">
+                <strong>已生成整体分析</strong>
+                <p class="mb-0 mt-2">{{ insight_payload.overview_text.split('\n')[0] }}</p>
+            </article>
+            <div class="create-note mt-3">
+                <span>最近生成时间</span>
+                <strong>{{ insight_payload.generated_at.strftime('%Y-%m-%d %H:%M') }} / {{ insight_payload.provider }} / {{ insight_payload.model_name }}</strong>
+            </div>
+            {% else %}
+            <div class="empty-panel">
+                <h3>第五章尚未生成</h3>
+                <p>当前分析页只负责展示第四章的数据证据。若要生成更贴合课程内容和大纲的第五章，请前往 AI 评价与改进页面手动生成。</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="panel-card">
+            <div class="section-head">
+                <div><h2>持续改进入口</h2><p>在专用页面中点击生成后，系统会保存当前课程、学期和班级范围下的最新第五章内容。</p></div>
+                <div class="section-kicker">{{ '已生成' if insight_payload else '待生成' }}</div>
+            </div>
+            <div class="stack-grid mb-3">
+                <article class="simple-card insight-card">
+                    {% if insight_payload %}
+                    已存在一份保存结果。你可以进入 AI 页面查看完整结构化内容，或重新生成覆盖当前范围下的旧结果。
+                    {% else %}
+                    当前报告预览页会显示“尚未生成”的空状态，不会再自动写入公式化第五章文本。
+                    {% endif %}
+                </article>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('insight.show', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-dark">去 AI 页面生成</a>
+                <a href="{{ url_for('report.preview', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-outline-dark">查看报告状态</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if has_analysis_result %}
+<script>
+const analysisCharts = {{ charts|tojson }};
+renderObjectiveBar("analysisObjectiveBar", analysisCharts.objective_bar);
+renderDistributionBar("distributionBar", analysisCharts.distribution_chart);
+renderAssessmentBar("assessmentBar", analysisCharts.assessment_bar);
+</script>
+{% endif %}
+{% endblock %}

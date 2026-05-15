@@ -1,0 +1,27 @@
+<section class="page-intro reveal {{ intro_class or '' }}">
+    <div class="page-intro-main">
+        <div class="page-intro-copy">
+            {% if eyebrow %}
+            <span class="page-tag">{{ eyebrow }}</span>
+            {% endif %}
+            <h1>{{ intro_title }}</h1>
+            {% if intro_text %}
+            <p>{{ intro_text }}</p>
+            {% endif %}
+            {% if intro_meta %}
+            <div class="page-meta-strip">
+                {% for item in intro_meta %}
+                <span>{{ item }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% if intro_actions %}
+        <div class="headline-actions">
+            {% for action in intro_actions %}
+            <a href="{{ action.href }}" class="btn {{ action.class or 'btn-outline-dark' }}">{{ action.label }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</section>

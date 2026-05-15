@@ -1,0 +1,8 @@
+<div class="source-note {{ source_variant or '' }}">
+    <div class="source-badges">
+        {% for item in source_tags %}
+        <span class="source-badge source-{{ item.kind }}">{{ item.label }}</span>
+        {% endfor %}
+    </div>
+    <p class="mb-0">{{ source_text }}</p>
+</div>

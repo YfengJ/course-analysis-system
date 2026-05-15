@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '教学大纲解析' %}
+{% set intro_title = course.name %}
+{% set intro_text = '上传教学大纲后，系统会自动提取课程信息、课程目标和支撑关系，并优先补齐主流程所需配置。' %}
+{% set intro_meta = [course.code, '解析状态 ' ~ (outline.parse_status if outline else '待解析'), '置信度 ' ~ ('%.0f%%'|format((outline.confidence or 0) * 100) if outline else '0%')] %}
+{% set intro_actions = [
+    {'href': url_for('importer.import_scores', course_id=course.id), 'label': '下一步导入成绩', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'outline' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="row g-4 mt-1">
+    <div class="col-lg-4">
+        <div class="panel-card reveal">
+            <h2 class="mb-3">上传教学大纲</h2>
+            {% set source_tags = [{'kind': 'direct', 'label': '直接读取'}, {'kind': 'manual', 'label': '解析回填'}] %}
+            {% set source_text = '本页的课程名称、课程目标、毕业要求映射等内容，首先来自教学大纲文件本身；系统只会在当前课程缺失信息时自动回填。' %}
+            {% include "partials/source_note.html" %}
+            <form method="post" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">{{ form.file.label(class="form-label") }}{{ form.file(class="form-control") }}</div>
+                {{ form.submit(class="btn btn-dark w-100") }}
+            </form>
+            <div class="tip-panel mt-4">
+                <strong>当前来源</strong>
+                <p class="mb-0">{{ outline.filename if outline else '尚未上传外部教学大纲' }}</p>
+            </div>
+            <div class="tip-panel mt-3">
+                <strong>解析状态</strong>
+                <p class="mb-0">{% if outline %}{{ outline.parse_status }} / 置信度 {{ "%.0f%%"|format((outline.confidence or 0) * 100) }}{% else %}待解析{% endif %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="panel-card reveal">
+            <div class="section-head">
+                <div>
+                    <h2>解析结果</h2>
+                    <p>解析完成后，系统会展示提取结果，并在当前课程缺失信息时自动补全相关字段。</p>
+                </div>
+            </div>
+            {% if parsed_outline %}
+                {% if parsed_outline.sync_notes %}
+                <div class="alert alert-warning border-0 rounded-4 mb-4" role="alert">
+                    <strong>已保留当前课程基础信息</strong>
+                    <ul class="mb-0 mt-2">
+                        {% for note in parsed_outline.sync_notes %}
+                        <li>{{ note }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div class="info-grid mb-4">
+                    <div><span>课程名称</span><strong>{{ parsed_outline.course_name or course.name }}</strong></div>
+                    <div><span>课程编号</span><strong>{{ parsed_outline.course_code or course.code }}</strong></div>
+                    <div><span>学时/学分</span><strong>{{ parsed_outline.hours_credits or (course.hours ~ '/' ~ course.credits) }}</strong></div>
+                    <div><span>考核方式</span><strong>{{ parsed_outline.assessment_method or course.assessment_method }}</strong></div>
+                </div>
+                <h3 class="minor-title">课程目标</h3>
+                <div class="stack-grid mb-4">
+                    {% for item in parsed_outline.objectives %}
+                    <article class="simple-card">
+                        <strong>{{ item.title }}</strong>
+                        <p class="mb-0">{{ item.description }}</p>
+                    </article>
+                    {% endfor %}
+                </div>
+                <h3 class="minor-title">毕业要求与支撑强度</h3>
+                <div class="stack-grid mb-4">
+                    {% for item in parsed_outline.requirements %}
+                    <article class="simple-card">
+                        <strong>{{ item.indicator_point }} / {{ item.objective_ref }}</strong>
+                        <p>{{ item.requirement_description }}</p>
+                        <small>支撑强度：{{ item.support_strength }}</small>
+                    </article>
+                    {% else %}
+                    <article class="simple-card">
+                        <strong>暂未提取到完整毕业要求映射</strong>
+                        <p class="mb-0">可继续在课程目标页面完善指标点与支撑强度配置。</p>
+                    </article>
+                    {% endfor %}
+                </div>
+                <h3 class="minor-title">课程考核项</h3>
+                <div class="course-meta-list">
+                    {% for item in assessments %}
+                    <span>{{ item.name }} / 总分 {{ item.total_score }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-panel">
+                    <h3>尚未解析外部教学大纲</h3>
+                    <p>系统已经为当前课程准备了默认目标骨架，上传教学大纲后会自动补齐课程目标文本。</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

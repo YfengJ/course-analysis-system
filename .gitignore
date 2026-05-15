@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.token
+
+# Runtime data
+instance/
+uploads/
+exports/
+tmp/
+sample_data/*
+!sample_data/README.md
+
+# Office documents, score sheets, databases and generated reports
+*.db
+*.sqlite
+*.sqlite3
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.xlsm
+*.csv
+*.pdf
+
+# IDE and OS files
+.DS_Store
+.idea/
+.vscode/
+
+# Node / browser tooling caches
+node_modules/
+.playwright-cli/
+playwright-report/
+test-results/
+
+# Local thesis/material folders that may contain private data
+docx/
+output/
+datasoruce/
+成绩和教学大纲/
+mimic/
