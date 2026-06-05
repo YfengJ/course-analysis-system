@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField, FileRequired
-from wtforms import FloatField, SelectField, StringField, SubmitField, TextAreaField
-from wtforms.validators import DataRequired, Length, NumberRange, Optional
+from wtforms import FloatField, PasswordField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms.validators import DataRequired, EqualTo, Length, NumberRange, Optional
 
 
 class CourseForm(FlaskForm):
@@ -60,3 +60,23 @@ class AnalysisFilterForm(FlaskForm):
     semester = SelectField("学期", choices=[], validators=[Optional()])
     class_scope = SelectField("班级", choices=[], validators=[Optional()])
     submit = SubmitField("查看分析")
+
+
+class LoginForm(FlaskForm):
+    username = StringField("账号", validators=[DataRequired(), Length(max=64)])
+    password = PasswordField("密码", validators=[DataRequired(), Length(max=128)])
+    submit = SubmitField("登录系统")
+
+
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField("当前密码", validators=[DataRequired(), Length(max=128)])
+    new_password = PasswordField("新密码", validators=[DataRequired(), Length(min=8, max=128)])
+    confirm_password = PasswordField(
+        "确认新密码",
+        validators=[
+            DataRequired(),
+            EqualTo("new_password", message="两次输入的新密码不一致"),
+            Length(max=128),
+        ],
+    )
+    submit = SubmitField("更新密码")

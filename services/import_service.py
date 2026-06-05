@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -49,6 +50,27 @@ class ImportService:
         path = upload_dir / filename
         file_storage.save(path)
         return path
+
+    @staticmethod
+    def _file_hash(file_path: Path):
+        digest = hashlib.sha256()
+        with Path(file_path).open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _student_count(course: Course, semester: str):
+        return Student.query.filter_by(course_id=course.id, semester=semester).count()
+
+    @classmethod
+    def _next_import_version(cls, course: Course, semester: str):
+        latest = (
+            ImportBatch.query.filter_by(course_id=course.id, semester=semester)
+            .order_by(ImportBatch.import_version.desc(), ImportBatch.created_at.desc())
+            .first()
+        )
+        return (latest.import_version + 1) if latest and latest.import_version else 1
 
     @classmethod
     def normalize_columns(cls, dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -134,11 +156,12 @@ class ImportService:
         students = Student.query.filter_by(course_id=course.id, semester=semester).all()
         student_ids = [item.id for item in students]
         if not student_ids:
-            return
+            return 0
         ObjectiveScore.query.filter(ObjectiveScore.student_id.in_(student_ids)).delete(synchronize_session=False)
         Score.query.filter(Score.student_id.in_(student_ids)).delete(synchronize_session=False)
         Student.query.filter(Student.id.in_(student_ids)).delete(synchronize_session=False)
         db.session.flush()
+        return len(student_ids)
 
     @classmethod
     def _sync_requirement_maps(cls, course: Course, parsed_requirements):
@@ -393,6 +416,157 @@ class ImportService:
         return issues
 
     @staticmethod
+    def _student_classes_from_dataframe(dataframe: pd.DataFrame):
+        if "班级" not in dataframe.columns:
+            return []
+        classes = []
+        for value in dataframe["班级"].dropna().tolist():
+            class_name = str(value).strip()
+            if class_name and class_name not in classes:
+                classes.append(class_name)
+        return classes
+
+    @staticmethod
+    def _basic_student_issues(dataframe: pd.DataFrame):
+        issues = []
+        if "学号" not in dataframe.columns:
+            return ["缺少必要列：学号"]
+        seen = set()
+        for index, row in dataframe.iterrows():
+            row_no = index + 2
+            student_no = str(row.get("学号", "")).strip()
+            if not student_no:
+                issues.append(f"第 {row_no} 行缺少学号")
+            elif student_no in seen:
+                issues.append(f"第 {row_no} 行学号重复：{student_no}")
+            seen.add(student_no)
+        return issues
+
+    @classmethod
+    def _preview_flat_scores(cls, adapter_result, file_path: Path, course: Course):
+        dataframe = adapter_result["dataframe"].copy()
+        dataframe = dataframe.astype(object).where(pd.notna(dataframe), "")
+        recognized_assessments = [item.name for item in course.assessments if item.name in dataframe.columns]
+        candidate_assessments = recognized_assessments or cls._score_columns_from_flat_dataframe(dataframe)
+        issues = (
+            cls._validate_score_dataframe(dataframe, course)
+            if recognized_assessments
+            else cls._basic_student_issues(dataframe)
+        )
+        if not candidate_assessments:
+            issues.append("未识别到可用于计算的成绩列，请使用系统生成的成绩模板或包含课程目标分项得分的成绩表。")
+
+        record_count = 0
+        if "学号" in dataframe.columns:
+            record_count = int(dataframe["学号"].astype(str).str.strip().ne("").sum())
+        return {
+            "filename": file_path.name,
+            "sheet": adapter_result.get("sheet_name") or "-",
+            "mode": "标准成绩表",
+            "record_count": record_count,
+            "classes": cls._student_classes_from_dataframe(dataframe),
+            "assessment_columns": candidate_assessments,
+            "issues": issues,
+        }
+
+    @classmethod
+    def _preview_objective_split_scores(cls, adapter_result, file_path: Path, course: Course):
+        issues = []
+        classes = []
+        seen = set()
+        full_score_lookup = cls._build_full_score_lookup(adapter_result)
+        configured_objectives = {
+            cls._normalize_objective_ref(objective.title)
+            for objective in CourseObjective.query.filter_by(course_id=course.id).all()
+        }
+        for record in adapter_result.get("records") or []:
+            row_no = record.get("row_no", "?")
+            student_no = str(record.get("student_no") or "").strip()
+            if not student_no:
+                issues.append(f"第 {row_no} 行缺少学号")
+            elif student_no in seen:
+                issues.append(f"第 {row_no} 行学号重复：{student_no}")
+            seen.add(student_no)
+            class_name = str(record.get("class_name") or "").strip()
+            if class_name and class_name not in classes:
+                classes.append(class_name)
+
+            for objective_ref, assessment_scores in (record.get("objective_scores") or {}).items():
+                normalized_objective = cls._normalize_objective_ref(objective_ref)
+                if configured_objectives and normalized_objective not in configured_objectives:
+                    issues.append(f"第 {row_no} 行未找到 {normalized_objective} 对应的课程目标配置")
+                    continue
+                for assessment_name, score_value in assessment_scores.items():
+                    try:
+                        numeric_value = float(score_value)
+                    except (TypeError, ValueError):
+                        issues.append(f"第 {row_no} 行 {normalized_objective}-{assessment_name} 不是有效数字")
+                        continue
+                    full_score = full_score_lookup.get(normalized_objective, {}).get(assessment_name)
+                    if full_score and (numeric_value < 0 or numeric_value > full_score):
+                        issues.append(f"第 {row_no} 行 {normalized_objective}-{assessment_name} 超出允许范围 0-{full_score}")
+
+        return {
+            "filename": file_path.name,
+            "sheet": adapter_result.get("sheet_name") or "-",
+            "mode": "课程目标分项表",
+            "record_count": len(adapter_result.get("records") or []),
+            "classes": classes,
+            "assessment_columns": [
+                item.get("assessment_name")
+                for block in adapter_result.get("objective_blocks") or []
+                for item in block.get("items") or []
+                if item.get("assessment_name")
+            ],
+            "issues": issues,
+        }
+
+    @classmethod
+    def preview_score_files(cls, file_paths, course: Course, semester: str):
+        """预检成绩文件，不写入学生、成绩或导入批次。"""
+        paths = [Path(item) for item in file_paths if item]
+        if not paths:
+            return {"success": False, "issues": ["请至少选择一个成绩文件。"], "files": [], "imported_estimate": 0}
+
+        preview_files = []
+        issues = []
+        imported_estimate = 0
+        all_classes = []
+        for path in paths:
+            try:
+                adapter_result = ScoreTemplateAdapter.load_score_payload(path, cls.normalize_columns)
+                if adapter_result["mode"] == "objective_split":
+                    file_preview = cls._preview_objective_split_scores(adapter_result, path, course)
+                else:
+                    file_preview = cls._preview_flat_scores(adapter_result, path, course)
+            except Exception as exc:  # noqa: BLE001
+                file_preview = {
+                    "filename": path.name,
+                    "sheet": "-",
+                    "mode": "无法识别",
+                    "record_count": 0,
+                    "classes": [],
+                    "assessment_columns": [],
+                    "issues": [f"文件读取失败：{exc}"],
+                }
+
+            preview_files.append(file_preview)
+            imported_estimate += file_preview["record_count"]
+            for class_name in file_preview["classes"]:
+                if class_name not in all_classes:
+                    all_classes.append(class_name)
+            issues.extend([f"{file_preview['filename']}：{item}" for item in file_preview["issues"]])
+
+        return {
+            "success": not issues,
+            "issues": issues,
+            "files": preview_files,
+            "classes": all_classes,
+            "imported_estimate": imported_estimate,
+            "semester": semester,
+        }
+
+    @staticmethod
     def _normalize_student_name(raw_name: str, student_no: str) -> str:
         clean_name = str(raw_name or "").strip()
         return clean_name or f"学生{student_no}"
@@ -536,6 +710,7 @@ class ImportService:
         if not recognized_assessments:
             cls._sync_assessment_support_from_flat_scores(course, dataframe)
         issues = cls._validate_score_dataframe(dataframe, course)
+        pre_student_count = cls._student_count(course, semester)
         if not any(item.name in dataframe.columns for item in course.assessments):
             issues.append("未识别到可用于计算的成绩列，请使用系统生成的成绩模板，或上传包含课程目标分项/考核项得分的成绩表。")
         batch = ImportBatch(
@@ -551,6 +726,13 @@ class ImportService:
             column_mapping_json=json.dumps(adapter_result["mapping"], ensure_ascii=False),
             template_name=ScoreTemplateAdapter.NAME,
             source_template=file_path.name,
+            import_version=cls._next_import_version(course, semester),
+            file_hash=cls._file_hash(file_path),
+            source_files_json=json.dumps([file_path.name], ensure_ascii=False),
+            pre_student_count=pre_student_count,
+            post_student_count=pre_student_count,
+            cleanup_count=0,
+            status="导入失败" if issues else "导入中",
         )
         db.session.add(batch)
         if issues:
@@ -560,7 +742,7 @@ class ImportService:
         assessment_map = {item.name: item for item in course.assessments}
         objective_weight_lookup = cls._build_objective_weight_lookup(course)
         if reset_semester:
-            cls._clear_semester_scores(course, semester)
+            batch.cleanup_count = cls._clear_semester_scores(course, semester)
         imported = 0
         for _, row in dataframe.iterrows():
             student_no = str(row["学号"]).strip()
@@ -601,6 +783,8 @@ class ImportService:
         batch.imported_count = imported
         batch.issue_count = 0
         batch.issues_json = json.dumps([], ensure_ascii=False)
+        batch.post_student_count = cls._student_count(course, semester)
+        batch.status = "已完成"
         db.session.commit()
         return {"success": True, "issues": [], "imported": imported, "batch": batch}
 
@@ -612,6 +796,7 @@ class ImportService:
         objective_weight_lookup = cls._build_objective_weight_lookup(course)
         full_score_lookup = cls._build_full_score_lookup(adapter_result)
         assessment_lookup = {item.name: item for item in course.assessments}
+        pre_student_count = cls._student_count(course, semester)
         batch = ImportBatch(
             course_id=course.id,
             semester=semester,
@@ -625,11 +810,18 @@ class ImportService:
             column_mapping_json=json.dumps(adapter_result["mapping"], ensure_ascii=False),
             template_name=ScoreTemplateAdapter.NAME,
             source_template=file_path.name,
+            import_version=cls._next_import_version(course, semester),
+            file_hash=cls._file_hash(file_path),
+            source_files_json=json.dumps([file_path.name], ensure_ascii=False),
+            pre_student_count=pre_student_count,
+            post_student_count=pre_student_count,
+            cleanup_count=0,
+            status="导入中",
         )
         db.session.add(batch)
 
         if reset_semester:
-            cls._clear_semester_scores(course, semester)
+            batch.cleanup_count = cls._clear_semester_scores(course, semester)
         imported = 0
         for record in adapter_result["records"]:
             student_no = str(record["student_no"]).strip()
@@ -681,6 +873,8 @@ class ImportService:
         batch.imported_count = imported
         batch.issue_count = len(issues)
         batch.issues_json = json.dumps(issues, ensure_ascii=False)
+        batch.post_student_count = cls._student_count(course, semester)
+        batch.status = "已完成" if not issues else "存在问题"
         db.session.commit()
         return {"success": len(issues) == 0, "issues": issues, "imported": imported, "batch": batch}
 
@@ -700,7 +894,18 @@ class ImportService:
         if not paths:
             return {"success": False, "issues": ["请至少选择一个成绩文件。"], "imported": 0, "batches": []}
 
-        cls._clear_semester_scores(course, semester)
+        preview = cls.preview_score_files(paths, course, semester)
+        if not preview["success"]:
+            return {
+                "success": False,
+                "issues": preview["issues"],
+                "imported": 0,
+                "batches": [],
+                "preview": preview,
+            }
+
+        pre_student_count = cls._student_count(course, semester)
+        cleanup_count = cls._clear_semester_scores(course, semester)
         db.session.commit()
 
         total_imported = 0
@@ -715,6 +920,16 @@ class ImportService:
 
         course.student_count = Student.query.filter_by(course_id=course.id, semester=semester).count()
         cls._sync_course_class_names(course, semester)
+        post_student_count = cls._student_count(course, semester)
+        source_files_json = json.dumps([path.name for path in paths], ensure_ascii=False)
+        for batch in batches:
+            batch.source_files_json = source_files_json
+            batch.pre_student_count = pre_student_count
+            batch.post_student_count = post_student_count
+            batch.cleanup_count = cleanup_count
+            batch.notes = f"本次共上传 {len(paths)} 个成绩文件，合并导入 {total_imported} 名学生。"
+            if issues and batch.status == "已完成":
+                batch.status = "存在问题"
         db.session.commit()
         return {"success": not issues, "issues": issues, "imported": total_imported, "batches": batches}
 

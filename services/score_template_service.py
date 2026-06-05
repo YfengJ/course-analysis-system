@@ -9,7 +9,7 @@ class ScoreTemplateService:
     """按当前课程配置生成可直接上传的简化成绩模板。"""
 
     SHEET_NAME = "达成度计算表"
-    TEMPLATE_ROW_COUNT = 206
+    TEMPLATE_ROW_COUNT = 506
 
     HEADER_FILL = PatternFill("solid", fgColor="D9E6F8")
     SUB_HEADER_FILL = PatternFill("solid", fgColor="EEF3FB")

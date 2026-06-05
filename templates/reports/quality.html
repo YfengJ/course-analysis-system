@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+{% set eyebrow = '报告质量检查' %}
+{% set intro_title = course.name %}
+{% set intro_text = '当前为正式归档检查：占位课程目标、缺失映射、导入异常、第五章未保存等问题会作为阻断项处理。' if quality.strict else '在导出或归档前检查课程信息、成绩数据、计算状态、第五章内容和报告版本，帮助老师发现会影响正式报告的问题。' %}
+{% set intro_meta = [semester, class_scope, '阻断项 ' ~ quality.blocking_count, '提醒项 ' ~ quality.warning_count, '通过项 ' ~ quality.pass_count] %}
+{% set intro_actions = [
+    {'href': url_for('report.preview', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '返回报告页', 'class': 'btn-outline-dark'},
+    {'href': url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '查看计算分析', 'class': 'btn-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+{% set active_tab = 'reports' %}
+{% include "partials/course_tabs.html" %}
+
+<div class="panel-card compact-action-bar my-4 reveal">
+    <div>
+        <strong>{{ '可以进入导出与归档' if quality.ready else '需要先处理阻断项' }}</strong>
+        <p class="mb-0">
+            {% if quality.ready %}
+            当前没有阻断正式报告生成的问题；仍建议确认提醒项后再归档。
+            {% else %}
+            当前存在会影响正式报告可信度的阻断项，请先按建议修正。
+            {% endif %}
+        </p>
+    </div>
+    <div class="headline-actions">
+        <a href="{{ url_for('report.preview', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">查看报告预览</a>
+        {% if quality.ready %}
+        <a href="{{ url_for('report.export_archive_package', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">下载归档包</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel-card reveal">
+    <div class="table-responsive">
+        <table class="table modern-table align-middle">
+            <thead>
+            <tr>
+                <th>状态</th>
+                <th>检查项</th>
+                <th>检查结果</th>
+                <th>处理建议</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in quality["items"] %}
+            <tr>
+                <td>
+                    {% if item.level == 'error' %}
+                    <span class="badge text-bg-danger">阻断</span>
+                    {% elif item.level == 'warning' %}
+                    <span class="badge text-bg-warning">提醒</span>
+                    {% else %}
+                    <span class="badge text-bg-success">通过</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.category }}</td>
+                <td>{{ item.message }}</td>
+                <td>{{ item.suggestion or '无需处理' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

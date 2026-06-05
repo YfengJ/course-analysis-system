@@ -1,0 +1,28 @@
+{
+  "course_name": "大数据存储技术",
+  "course_code": "110842105",
+  "hours": 32,
+  "credits": 1.5,
+  "assessment_method": "考查",
+  "expected_value": 0.65,
+  "objectives": [
+    {
+      "title": "课程目标1",
+      "weight": 35,
+      "requirement_indicator": "3-1",
+      "support_strength": "H"
+    },
+    {
+      "title": "课程目标2",
+      "weight": 25,
+      "requirement_indicator": "4-2",
+      "support_strength": "M"
+    },
+    {
+      "title": "课程目标3",
+      "weight": 40,
+      "requirement_indicator": "5-2",
+      "support_strength": "H"
+    }
+  ]
+}

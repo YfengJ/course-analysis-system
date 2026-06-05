@@ -1,8 +1,5 @@
 from collections import defaultdict
-import re
 import statistics
-
-from docx import Document
 
 from models import (
     Assessment,
@@ -19,7 +16,6 @@ from models import (
 class AttainmentService:
     DISTRIBUTION_LABELS = ["0.90以上", "0.80-0.89", "0.70-0.79", "0.60-0.69", "0.60以下"]
     QUALITATIVE_SCORE_MAP = {"优": 90, "良": 80, "中": 70, "差": 60}
-    REFERENCE_REPORT_PATH = None
 
     @staticmethod
     def _distribution_bucket(rate: float) -> str:
@@ -67,145 +63,6 @@ class AttainmentService:
         value = float(value or 0)
         text = f"{value:.{digits}f}"
         return text.rstrip("0").rstrip(".") if "." in text else text
-
-    @staticmethod
-    def _reference_cell_text(cell):
-        return cell.text.replace("\n", "").strip()
-
-    @staticmethod
-    def _to_reference_int(value):
-        try:
-            return int(float(str(value).strip()))
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _to_reference_float(value):
-        try:
-            return float(str(value).strip())
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _normalize_reference_text(value):
-        return re.sub(r"\s+", "", str(value or ""))
-
-    @classmethod
-    def _reference_objectives_match_course(cls, document, course):
-        if len(document.tables) < 5:
-            return False
-        course_objectives = {
-            objective.title: cls._normalize_reference_text(f"{objective.title}：{objective.description}")
-            for objective in course.objectives
-        }
-        matched_count = 0
-        for row in document.tables[4].rows[1:]:
-            title = cls._reference_cell_text(row.cells[0])
-            if not title.startswith("课程目标"):
-                continue
-            reference_question = cls._normalize_reference_text(row.cells[1].text)
-            if course_objectives.get(title) != reference_question:
-                return False
-            matched_count += 1
-        return matched_count > 0
-
-    @classmethod
-    def _reference_template_matches_course(cls, document, course):
-        if not document.tables:
-            return False
-        table = document.tables[0]
-        if len(table.rows) < 1 or len(table.columns) < 4:
-            return False
-        template_code = cls._reference_cell_text(table.cell(0, 1))
-        template_name = cls._reference_cell_text(table.cell(0, 3))
-        if template_code == (course.code or "").strip() and template_name == (course.name or "").strip():
-            return True
-        return template_name == (course.name or "").strip() and cls._reference_objectives_match_course(document, course)
-
-    @classmethod
-    def _load_reference_qualitative_rows(cls, course):
-        """读取老师标准报告中已给出的定性评价表，作为该样例课程的人工等级口径。"""
-        if not cls.REFERENCE_REPORT_PATH:
-            return None
-        document = Document(str(cls.REFERENCE_REPORT_PATH))
-        if not cls._reference_template_matches_course(document, course) or len(document.tables) < 5:
-            return None
-
-        reference_rows = {}
-        reference_total = None
-        table = document.tables[4]
-        for row in table.rows[1:]:
-            title = cls._reference_cell_text(row.cells[0])
-            if not title:
-                continue
-            if "课程总目标" in title:
-                reference_total = cls._to_reference_float(cls._reference_cell_text(row.cells[7]))
-                continue
-            counts = [cls._to_reference_int(cls._reference_cell_text(row.cells[index])) for index in range(2, 6)]
-            score_rate = cls._to_reference_float(cls._reference_cell_text(row.cells[6]))
-            attainment = cls._to_reference_float(cls._reference_cell_text(row.cells[7]))
-            if any(value is None for value in counts) or score_rate is None or attainment is None:
-                continue
-            reference_rows[title] = {
-                "excellent_count": counts[0],
-                "good_count": counts[1],
-                "medium_count": counts[2],
-                "poor_count": counts[3],
-                "score_rate": score_rate,
-                "attainment": attainment,
-            }
-        return {"rows": reference_rows, "total": reference_total} if reference_rows else None
-
-    @classmethod
-    def _apply_reference_qualitative_rows(cls, course, objective_results, qualitative_rows, total_objective_weight):
-        reference = cls._load_reference_qualitative_rows(course)
-        if not reference:
-            return None
-
-        rows_by_title = reference["rows"]
-        if not all(item["objective_title"] in rows_by_title for item in objective_results):
-            return None
-
-        source_note = "当前课程匹配老师标准报告模板，定性评价采用模板中已给出的优、良、中、差人数，再按90、80、70、60赋分计算。"
-        for item in objective_results:
-            reference_row = rows_by_title[item["objective_title"]]
-            counts = {
-                "优": reference_row["excellent_count"],
-                "良": reference_row["good_count"],
-                "中": reference_row["medium_count"],
-                "差": reference_row["poor_count"],
-            }
-            item["qualitative_counts"] = counts
-            item["qualitative_score_percent"] = round(reference_row["score_rate"], 1)
-            item["qualitative_attainment"] = round(reference_row["attainment"], 4)
-            item["qualitative_rule_note"] = source_note
-
-        for row in qualitative_rows:
-            reference_row = rows_by_title.get(row["objective_title"])
-            if not reference_row:
-                continue
-            row.update(reference_row)
-
-        weighted_total = round(
-            sum(item["qualitative_attainment"] * (item["objective_weight"] / total_objective_weight) for item in objective_results),
-            4,
-        )
-        total_qualitative = round(reference["total"], 4) if reference.get("total") is not None else weighted_total
-        total_qualitative_score_percent = round(total_qualitative * 100, 1)
-        for row in qualitative_rows:
-            if row["objective_title"] == "课程总目标计算":
-                row.update(
-                    {
-                        "excellent_count": "课程总目标计算",
-                        "good_count": "课程总目标计算",
-                        "medium_count": "课程总目标计算",
-                        "poor_count": "课程总目标计算",
-                        "score_rate": "课程总目标计算",
-                        "attainment": total_qualitative,
-                    }
-                )
-                break
-        return total_qualitative, total_qualitative_score_percent
 
     @classmethod
     def _build_calculation_details(
@@ -697,15 +554,6 @@ class AttainmentService:
                 "attainment": total_qualitative,
             }
         )
-
-        reference_qualitative = cls._apply_reference_qualitative_rows(
-            course,
-            objective_results,
-            qualitative_rows,
-            total_objective_weight,
-        )
-        if reference_qualitative:
-            total_qualitative, total_qualitative_score_percent = reference_qualitative
 
         distribution_rows = []
         for item in objective_results:

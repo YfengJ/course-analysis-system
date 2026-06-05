@@ -3,11 +3,12 @@
 {% set summary = report_context.summary %}
 {% set eyebrow = '报告预览' %}
 {% set intro_title = course.name %}
-{% set intro_text = '查看课程分析报告，并区分每一章的数据来源、规则计算结果和 AI 生成内容。' %}
+{% set intro_text = '查看课程分析报告，并区分每一章的数据来源、规则计算结果和教师确认内容。' %}
 {% set has_report_data = report_context.analysis_ready and summary.student_count > 0 %}
 {% set intro_meta = [semester, class_scope, ('定量达成度 ' ~ "%.2f"|format(summary.total_quantitative_attainment)) if has_report_data else '定量达成度 待计算', ('结果 ' ~ summary.total_status) if has_report_data else '状态 待先计算第四章'] %}
 {% set intro_actions = [
     {'href': url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '返回分析页', 'class': 'btn-outline-dark'},
+    {'href': url_for('report.quality_check', course_id=course.id, semester=semester, class_scope=class_scope, strict=1), 'label': '正式检查', 'class': 'btn-outline-dark'},
     {'href': url_for('report.export_word', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '导出 Word', 'class': 'btn-dark'} if has_report_data else {'href': url_for('importer.import_scores', course_id=course.id), 'label': '先导入成绩', 'class': 'btn-dark'}
 ] %}
 {% include "partials/page_intro.html" %}
@@ -22,7 +23,8 @@
     </div>
     <div class="headline-actions">
         {% if has_report_data %}
-        <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">去生成第五章</a>
+        <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">编辑第五章</a>
+        <a href="{{ url_for('report.export_archive_package', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">下载归档包</a>
         <button class="btn btn-outline-dark" onclick="window.print()">打印为 PDF</button>
         {% endif %}
     </div>
@@ -30,7 +32,7 @@
 
 <div class="panel-card mb-4 reveal">
     <div class="section-head">
-        <div><h2>本报告数据来源说明</h2><p>下面每章分别对应“文件读取”“系统规则计算”和“AI 生成”三种来源，答辩时可以直接按这个口径介绍。</p></div>
+        <div><h2>本报告数据来源说明</h2><p>下面每章分别对应“文件读取”“系统规则计算”“智能建议”和“教师编辑”等来源，便于老师复核报告证据。</p></div>
     </div>
     <div class="source-legend-grid">
         <div class="simple-card">
@@ -48,9 +50,9 @@
         </div>
         <div class="simple-card">
             <div class="source-badges">
-                <span class="source-badge source-ai">AI 生成</span>
+                <span class="source-badge source-ai">智能建议</span>
             </div>
-            <p class="mb-0">第五章的分析与改进措施由 AI 生成，但它必须建立在已经算好的第四章数据和教学大纲内容之上。</p>
+            <p class="mb-0">第五章可由智能建议生成，也可以由教师人工编辑保存；两种内容都会建立在第四章数据和教学大纲内容之上。</p>
         </div>
     </div>
 </div>
@@ -218,8 +220,8 @@
 
         {% if report_context.chapter_five_ready %}
         <h3>五、评价结果分析与持续改进措施</h3>
-        {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': 'AI 生成'}] %}
-        {% set source_text = '第五章文字内容不是固定模板，而是系统读取第四章计算结果和教学大纲信息后，由 AI 生成并保存的结构化分析。' %}
+        {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'manual', 'label': '教师编辑'}] if report_context.chapter_five_source in ['manual_revision', 'manual_edit'] else [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': '智能建议'}] %}
+        {% set source_text = '第五章文字内容来自教师保存的人工编辑结果。' if report_context.chapter_five_source in ['manual_revision', 'manual_edit'] else '第五章文字内容不是固定模板，而是系统读取第四章计算结果和教学大纲信息后生成并保存的结构化分析。' %}
         {% include "partials/source_note.html" %}
         <p class="report-subtitle">（一）课程目标达成情况分析</p>
         <p>{{ report_context.generated_insight.overview_text }}</p>
@@ -252,9 +254,9 @@
         {% else %}
         <div class="empty-panel">
             <h3>第五章尚未生成</h3>
-            <p>当前课程在 {{ semester }} / {{ class_scope }} 范围下还没有保存的 AI 评价结果分析与持续改进措施，因此报告中暂不写入正式第五章内容。</p>
+            <p>当前课程在 {{ semester }} / {{ class_scope }} 范围下还没有保存的评价结果分析与持续改进措施，因此报告中暂不写入正式第五章内容。</p>
             <div class="d-flex gap-2 justify-content-center flex-wrap">
-                <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">去生成第五章</a>
+                <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">去编辑第五章</a>
                 <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">返回分析页</a>
             </div>
         </div>
@@ -309,7 +311,16 @@
             <h2 class="mb-3">历史记录</h2>
             <ul class="plain-list">
                 {% for item in recent_reports %}
-                <li>{{ item.created_at.strftime('%Y-%m-%d') }} / {{ item.class_scope }} / {{ "%.2f"|format(item.quantitative_attainment) }}</li>
+                <li>
+                    <div class="d-flex justify-content-between gap-2 align-items-center">
+                        <span>{{ item.created_at.strftime('%Y-%m-%d') }} / v{{ item.report_version or 1 }} / {{ item.class_scope }} / {{ "%.2f"|format(item.quantitative_attainment) }}{% if item.is_archived %} / 已归档{% endif %}</span>
+                        {% if not item.is_archived %}
+                        <form method="post" action="{{ url_for('report.archive_report', course_id=course.id, report_id=item.id) }}">
+                            <button type="submit" class="btn btn-outline-dark btn-sm">归档</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </li>
                 {% else %}
                 <li>暂无历史报告记录。</li>
                 {% endfor %}

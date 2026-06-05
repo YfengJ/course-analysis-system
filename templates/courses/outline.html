@@ -2,7 +2,7 @@
 {% block content %}
 {% set eyebrow = '教学大纲解析' %}
 {% set intro_title = course.name %}
-{% set intro_text = '上传教学大纲后，系统会自动提取课程信息、课程目标和支撑关系，并优先补齐主流程所需配置。' %}
+{% set intro_text = '上传教学大纲后，系统会先提取课程信息、课程目标和支撑关系，确认无误后再写入课程配置。' %}
 {% set intro_meta = [course.code, '解析状态 ' ~ (outline.parse_status if outline else '待解析'), '置信度 ' ~ ('%.0f%%'|format((outline.confidence or 0) * 100) if outline else '0%')] %}
 {% set intro_actions = [
     {'href': url_for('importer.import_scores', course_id=course.id), 'label': '下一步导入成绩', 'class': 'btn-dark'}
@@ -22,8 +22,18 @@
             <form method="post" enctype="multipart/form-data">
                 {{ form.hidden_tag() }}
                 <div class="mb-3">{{ form.file.label(class="form-label") }}{{ form.file(class="form-control") }}</div>
-                {{ form.submit(class="btn btn-dark w-100") }}
+                <button type="submit" name="action" value="preview" class="btn btn-dark w-100">预览教学大纲解析</button>
             </form>
+            {% if pending_outline %}
+            <div class="tip-panel mt-4">
+                <strong>待确认的解析结果</strong>
+                <p class="mb-3">{{ pending_outline.filename }} 已完成预览。确认后，系统才会同步课程目标、毕业要求映射和考核权重。</p>
+                <form method="post">
+                    <input type="hidden" name="action" value="confirm_pending">
+                    <button type="submit" class="btn btn-dark w-100">确认导入教学大纲</button>
+                </form>
+            </div>
+            {% endif %}
             <div class="tip-panel mt-4">
                 <strong>当前来源</strong>
                 <p class="mb-0">{{ outline.filename if outline else '尚未上传外部教学大纲' }}</p>
@@ -39,8 +49,11 @@
             <div class="section-head">
                 <div>
                     <h2>解析结果</h2>
-                    <p>解析完成后，系统会展示提取结果，并在当前课程缺失信息时自动补全相关字段。</p>
+                    <p>解析完成后，系统会先展示提取结果；点击确认后才会同步到当前课程。</p>
                 </div>
+                {% if pending_outline %}
+                <span class="soft-badge">预览中，尚未写入</span>
+                {% endif %}
             </div>
             {% if parsed_outline %}
                 {% if parsed_outline.sync_notes %}

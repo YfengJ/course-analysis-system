@@ -1,0 +1,19 @@
+{
+  "name": "coursesystem",
+  "version": "1.0.0",
+  "description": "高校课程目标达成度分析与报告归档系统。",
+  "main": "index.js",
+  "scripts": {
+    "test": "python scripts/run_tests.py"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "echarts": "^5.5.1",
+    "mermaid": "^10.9.3",
+    "playwright": "^1.58.2"
+  }
+}

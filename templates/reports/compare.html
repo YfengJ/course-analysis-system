@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+{% set old_report = comparison.old_report %}
+{% set new_report = comparison.new_report %}
+{% set eyebrow = '报告对比' %}
+{% set intro_title = '报告版本差异' %}
+{% set intro_text = '对比同一统计范围下两次报告生成结果，方便查看多轮改进后的变化。' %}
+{% set intro_meta = ['旧版 v' ~ (old_report.report_version or 1), '新版 v' ~ (new_report.report_version or 1), new_report.semester, new_report.class_scope] %}
+{% set intro_actions = [
+    {'href': url_for('report_center.index'), 'label': '返回报告中心', 'class': 'btn-outline-dark'}
+] %}
+{% include "partials/page_intro.html" %}
+
+<div class="row g-4 mb-4 reveal">
+    <div class="col-md-6">
+        <div class="metric-card solid">
+            <span>定量达成度变化</span>
+            <strong>{{ "%+.2f"|format(comparison.total_quantitative_delta) }}</strong>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="metric-card solid">
+            <span>定性达成度变化</span>
+            <strong>{{ "%+.2f"|format(comparison.total_qualitative_delta) }}</strong>
+        </div>
+    </div>
+</div>
+
+<div class="panel-card reveal">
+    <div class="section-head">
+        <div><h2>课程目标差异</h2><p>逐项目标对比定量和定性达成度变化。</p></div>
+    </div>
+    <div class="table-responsive">
+        <table class="table modern-table align-middle">
+            <thead>
+            <tr><th>课程目标</th><th>旧版定量</th><th>新版定量</th><th>定量变化</th><th>旧版定性</th><th>新版定性</th><th>定性变化</th></tr>
+            </thead>
+            <tbody>
+            {% for item in comparison.objective_deltas %}
+            <tr>
+                <td>{{ item.objective_title }}</td>
+                <td>{{ "%.2f"|format(item.old_quantitative) }}</td>
+                <td>{{ "%.2f"|format(item.new_quantitative) }}</td>
+                <td>{{ "%+.2f"|format(item.quantitative_delta) }}</td>
+                <td>{{ "%.2f"|format(item.old_qualitative) }}</td>
+                <td>{{ "%.2f"|format(item.new_qualitative) }}</td>
+                <td>{{ "%+.2f"|format(item.qualitative_delta) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">这两版报告没有可对比的课程目标快照。</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

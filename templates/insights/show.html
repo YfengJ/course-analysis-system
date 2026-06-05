@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-{% set eyebrow = 'AI评价与改进' %}
+{% set eyebrow = '评价与改进' %}
 {% set intro_title = course.name %}
-{% set intro_text = '基于第四章统计数据、课程目标与教学大纲，显式生成并保存第五章的课程评价结果分析与持续改进措施。' %}
+{% set intro_text = '基于第四章统计数据、课程目标与教学大纲，生成或手工保存第五章的评价结果分析与持续改进措施。' %}
 {% set intro_meta = [semester, class_scope, '学生人数 ' ~ summary.student_count, ('状态 已生成' if insight_payload else '状态 待生成' if analysis_ready else '状态 待先计算第四章')] %}
 {% set intro_actions = [
     {'href': url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '返回分析页', 'class': 'btn-outline-dark'},
@@ -39,7 +39,7 @@
 <div class="panel-card reveal">
     <div class="empty-panel">
         <h3>请先完成第四章计算</h3>
-        <p>第五章 AI 分析必须建立在已经算出的第四章数据之上。当前课程虽然已有成绩数据，但还没有执行“03 计算分析”。</p>
+        <p>第五章内容必须建立在已经算出的第四章数据之上。当前课程虽然已有成绩数据，但还没有执行“03 计算分析”。</p>
         <div class="d-flex gap-2 justify-content-center flex-wrap">
             <a href="{{ url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">先去计算第四章</a>
             <a href="{{ url_for('importer.import_scores', course_id=course.id) }}" class="btn btn-outline-dark">返回成绩导入</a>
@@ -56,11 +56,11 @@
 
 <div class="panel-card mb-4 reveal">
     <div class="section-head">
-        <div><h2>生成控制台</h2><p>仅在你显式点击按钮后，系统才会调用已配置的大模型生成并覆盖当前课程、学期与班级范围下的第五章内容。</p></div>
-        <div class="section-kicker">{{ '大模型已连接' if llm_ready else '大模型未配置' }}</div>
+        <div><h2>第五章内容控制台</h2><p>可以使用智能建议生成，也可以由教师直接手工编辑保存；报告页和 Word 导出会复用这里的内容。</p></div>
+        <div class="section-kicker">{{ '智能建议可用' if llm_ready else '可手工编辑' }}</div>
     </div>
-    {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': 'AI 生成'}] %}
-    {% set source_text = '本页生成时会读取已经计算好的第四章数据，再结合教学大纲和课程目标描述，让 AI 生成第五章分析与改进措施。' %}
+    {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': '智能建议'}, {'kind': 'manual', 'label': '教师编辑'}] %}
+    {% set source_text = '本页会读取已经计算好的第四章数据和教学大纲内容；教师可以采纳智能建议，也可以直接编辑正式写入报告的第五章文字。' %}
     {% include "partials/source_note.html" %}
     <div class="insight-grid">
         <div class="insight-tile">
@@ -87,15 +87,39 @@
     <form method="post" class="mt-4 d-flex gap-2 flex-wrap">
         <input type="hidden" name="semester" value="{{ semester }}">
         <input type="hidden" name="class_scope" value="{{ class_scope }}">
-        <button type="submit" class="btn btn-dark">{{ '重新生成并覆盖当前结果' if insight_payload else '生成评价结果分析与持续改进措施' }}</button>
+        <input type="hidden" name="action" value="generate">
+        <button type="submit" class="btn btn-dark">{{ '重新生成智能建议' if insight_payload else '生成智能建议' }}</button>
         <a href="{{ url_for('report.preview', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">查看报告预览</a>
     </form>
     {% if not llm_ready %}
     <div class="create-note">
         <span>配置提醒</span>
-        <strong>当前尚未检测到大模型配置。请先设置 `LLM_API_KEY`，系统才会实际调用模型生成内容。</strong>
+        <strong>当前尚未检测到智能生成配置。你仍然可以在下方直接手工编辑第五章内容并写入报告。</strong>
     </div>
     {% endif %}
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>教师人工编辑</h2><p>这里保存的是正式报告第五章内容，适合老师在智能建议基础上二次确认，也适合完全不使用智能生成。</p></div>
+        <div class="section-kicker">保存后立即同步报告</div>
+    </div>
+    <form method="post" class="row g-3">
+        <input type="hidden" name="action" value="save_manual">
+        <input type="hidden" name="semester" value="{{ semester }}">
+        <input type="hidden" name="class_scope" value="{{ class_scope }}">
+        <div class="col-12">
+            <label class="form-label" for="overview_text">课程目标达成情况分析</label>
+            <textarea class="form-control" id="overview_text" name="overview_text" rows="5" placeholder="概括本轮课程目标达成情况、薄弱目标和改进方向。">{{ insight_payload.overview_text if insight_payload else '' }}</textarea>
+        </div>
+        <div class="col-12">
+            <label class="form-label" for="improvement_text">持续改进措施</label>
+            <textarea class="form-control" id="improvement_text" name="improvement_text" rows="4" placeholder="写入下一轮教学中准备采取的具体措施。">{% if insight_payload and insight_payload.improvement_actions %}{{ insight_payload.improvement_actions[0].action }}{% endif %}</textarea>
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-dark">保存人工编辑内容</button>
+        </div>
+    </form>
 </div>
 
 <div class="row g-4 mb-4 reveal">

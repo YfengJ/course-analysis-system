@@ -37,7 +37,7 @@
         <div class="directory-head">
             <div>
                 <h2>{{ item.course_name }}</h2>
-                <p>{{ item.course_code or '原课程记录缺失' }} / {{ item.report.semester }} / {{ item.report.class_scope }}</p>
+                <p>{{ item.course_code or '原课程记录缺失' }} / {{ item.report.semester }} / {{ item.report.class_scope }} / v{{ item.report.report_version or 1 }}</p>
             </div>
             <div class="status-pill {{ 'ok' if item.report.status == '达成' else 'pending' }}">{{ item.report.status }}</div>
         </div>
@@ -56,6 +56,9 @@
             {% endif %}
             {% if item.course %}
             <a href="{{ url_for('analysis.index', course_id=item.course.id, semester=item.report.semester, class_scope=item.report.class_scope) }}" class="btn btn-outline-dark">对应分析</a>
+            {% endif %}
+            {% if item.previous_report %}
+            <a href="{{ url_for('report_center.compare', old_id=item.previous_report.id, new_id=item.report.id) }}" class="btn btn-outline-dark">对比上一版</a>
             {% endif %}
         </div>
     </article>

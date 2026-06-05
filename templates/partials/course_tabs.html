@@ -9,6 +9,6 @@
     <div class="course-tools-row">
         <span>辅助入口</span>
         <a href="{{ url_for('course.manage_objectives', course_id=course.id) }}" class="{{ 'active' if active_tab == 'objectives' else '' }}">手动课程目标</a>
-        <a href="{{ url_for('insight.show', course_id=course.id) }}" class="{{ 'active' if active_tab == 'insights' else '' }}">AI 第五章</a>
+        <a href="{{ url_for('insight.show', course_id=course.id) }}" class="{{ 'active' if active_tab == 'insights' else '' }}">第五章编辑</a>
     </div>
 </div>

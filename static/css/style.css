@@ -27,7 +27,7 @@ html {
 
 body {
     margin: 0;
-    font-family: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     color: var(--text);
     background:
         radial-gradient(circle at top left, rgba(13, 124, 109, 0.12), transparent 28%),
@@ -143,6 +143,7 @@ body {
 }
 
 .quick-create {
+    border: 0;
     text-decoration: none;
     padding: 0.85rem 1.15rem;
     border-radius: 999px;
@@ -150,6 +151,100 @@ body {
     color: #fff;
     font-weight: 700;
     box-shadow: var(--shadow-soft);
+}
+
+.user-menu {
+    flex-shrink: 0;
+}
+
+.user-menu-toggle {
+    min-width: 8.5rem;
+}
+
+.user-menu-panel {
+    min-width: 220px;
+    padding: 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow-soft);
+}
+
+.user-menu-meta {
+    padding: 0.7rem 0.85rem 0.8rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 0.35rem;
+}
+
+.user-menu-meta strong,
+.user-menu-meta span {
+    display: block;
+}
+
+.user-menu-meta span {
+    margin-top: 0.2rem;
+    color: var(--muted);
+    font-size: 0.84rem;
+}
+
+.user-menu-panel .dropdown-item {
+    border-radius: 12px;
+    font-weight: 700;
+    padding: 0.72rem 0.85rem;
+}
+
+.auth-shell {
+    min-height: min(680px, calc(100vh - 190px));
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.72fr);
+    gap: 2rem;
+    align-items: center;
+}
+
+.auth-brief {
+    padding: clamp(1.2rem, 3vw, 3rem);
+}
+
+.auth-brief h1 {
+    margin: 0.75rem 0 1rem;
+    font-family: "Songti SC", "STSong", "SimSun", serif;
+    font-size: clamp(2.2rem, 5vw, 4.3rem);
+    line-height: 1.08;
+    font-weight: 900;
+}
+
+.auth-brief p {
+    max-width: 680px;
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1.9;
+}
+
+.auth-points {
+    display: grid;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
+    max-width: 640px;
+}
+
+.auth-points div {
+    padding: 1rem 1.1rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid var(--line);
+}
+
+.auth-points strong,
+.auth-points span {
+    display: block;
+}
+
+.auth-points span {
+    margin-top: 0.25rem;
+    color: var(--muted);
+}
+
+.auth-card {
+    width: 100%;
 }
 
 .page-main {
@@ -249,7 +344,7 @@ body {
 .hero-title,
 .poster-title,
 .sub-hero h1 {
-    font-family: "Noto Serif SC", serif;
+    font-family: "Songti SC", "STSong", "SimSun", serif;
     font-size: clamp(2rem, 4vw, 3.5rem);
     line-height: 1.05;
     margin: 0.35rem 0 1rem;
@@ -371,7 +466,7 @@ body {
 
 .poster-stage-head h2 {
     margin: 0.7rem 0 0.2rem;
-    font-family: "Noto Serif SC", serif;
+    font-family: "Songti SC", "STSong", "SimSun", serif;
     font-size: 1.8rem;
     font-weight: 800;
 }
@@ -1619,6 +1714,7 @@ body {
     }
 
     .hero-strip,
+    .auth-shell,
     .ops-shell,
     .ops-grid,
     .step-grid,
@@ -1640,6 +1736,10 @@ body {
 
     .quick-create {
         display: none;
+    }
+
+    .user-menu .quick-create {
+        display: inline-flex;
     }
 
     .knowledge-side {

@@ -1,13 +1,27 @@
+function resolveRatioAxisMax(values, fallback = 1) {
+    const numericValues = (values || [])
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value));
+    const maxValue = numericValues.length ? Math.max(...numericValues, fallback) : fallback;
+    if (maxValue <= 1) return 1;
+    return Number(Math.min(Math.ceil(maxValue * 10) / 10 + 0.1, 5).toFixed(1));
+}
+
 function renderObjectiveBar(elementId, payload) {
     const el = document.getElementById(elementId);
     if (!el) return;
     const chart = echarts.init(el);
+    const axisMax = resolveRatioAxisMax([
+        ...(payload.quantitative || []),
+        ...(payload.qualitative || []),
+        payload.expected
+    ]);
     chart.setOption({
         tooltip: { trigger: "axis" },
         legend: { data: ["定量达成度", "定性达成度", "期望值"] },
         grid: { left: 20, right: 20, top: 42, bottom: 20, containLabel: true },
         xAxis: { type: "category", data: payload.labels, axisTick: { show: false } },
-        yAxis: { type: "value", max: 1, splitLine: { lineStyle: { color: "rgba(20,32,49,0.08)" } } },
+        yAxis: { type: "value", max: axisMax, splitLine: { lineStyle: { color: "rgba(20,32,49,0.08)" } } },
         series: [
             { name: "定量达成度", type: "bar", data: payload.quantitative, itemStyle: { color: "#10213a", borderRadius: [10, 10, 0, 0] } },
             { name: "定性达成度", type: "bar", data: payload.qualitative, itemStyle: { color: "#0d7c6d", borderRadius: [10, 10, 0, 0] } },
@@ -21,9 +35,11 @@ function renderGaugeChart(elementId, payload) {
     const el = document.getElementById(elementId);
     if (!el) return;
     const chart = echarts.init(el);
+    const axisMax = resolveRatioAxisMax([payload.value]);
     chart.setOption({
         series: [{
             type: "gauge",
+            max: axisMax,
             progress: { show: true, width: 18 },
             axisLine: { lineStyle: { width: 18 } },
             detail: { valueAnimation: true, formatter: "{value}" },
@@ -37,11 +53,12 @@ function renderAssessmentBar(elementId, payload) {
     const el = document.getElementById(elementId);
     if (!el) return;
     const chart = echarts.init(el);
+    const axisMax = resolveRatioAxisMax(payload.values || []);
     chart.setOption({
         tooltip: { trigger: "axis" },
         grid: { left: 20, right: 20, top: 20, bottom: 20, containLabel: true },
         xAxis: { type: "category", data: payload.labels, axisTick: { show: false } },
-        yAxis: { type: "value", max: 1, splitLine: { lineStyle: { color: "rgba(20,32,49,0.08)" } } },
+        yAxis: { type: "value", max: axisMax, splitLine: { lineStyle: { color: "rgba(20,32,49,0.08)" } } },
         series: [{
             type: "bar",
             data: payload.values,

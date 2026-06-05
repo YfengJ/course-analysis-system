@@ -16,8 +16,8 @@ class ReportTemplateAdapter:
     """按照老师提供的达成度分析 Word 样稿生成正式报告。"""
 
     NAME = "report_template_adapter"
-    VERSION = "public-template-v1"
-    DEFAULT_TEMPLATE_PATH = Path("sample_data/report_template.docx")
+    VERSION = "teacher-docx-template-v6"
+    DEFAULT_TEMPLATE_PATH = None
 
     @classmethod
     def build_document(cls, course, semester, class_scope, context, template_path=None):
@@ -53,6 +53,8 @@ class ReportTemplateAdapter:
 
     @classmethod
     def _new_document(cls, template_path=None):
+        if not template_path and not cls.DEFAULT_TEMPLATE_PATH:
+            return Document()
         path = Path(template_path or cls.DEFAULT_TEMPLATE_PATH)
         return Document(str(path)) if path.exists() else Document()
 
@@ -180,7 +182,7 @@ class ReportTemplateAdapter:
             return seal_path, wordmark_path
 
         template_path = cls.DEFAULT_TEMPLATE_PATH
-        if not template_path.exists():
+        if not template_path or not Path(template_path).exists():
             return None, None
 
         seal_blob = None
@@ -907,7 +909,7 @@ class ReportTemplateAdapter:
         cls._add_text_paragraph(document, line_spacing=1.0, space_after=44)
 
         cover_rows = [
-            ("院系（盖章）", course.department or ""),
+            ("院系（盖章）", course.department or "计算机科学与技术系"),
             ("专      业", course.major or ""),
             ("年      级", cls._infer_grade(course, class_scope)),
             ("课 程 名 称", course.name),

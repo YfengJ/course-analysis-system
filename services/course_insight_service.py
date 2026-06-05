@@ -28,7 +28,7 @@ class CourseInsightService:
     @classmethod
     def generate_for_scope(cls, course, semester: str, class_scope: str):
         if not LLMService.is_configured():
-            raise RuntimeError("尚未配置大模型 API Key，暂时无法生成课程评价结果。")
+            raise RuntimeError("尚未配置智能生成服务密钥，暂时无法自动生成课程评价结果。你仍可手工编辑第五章。")
 
         summary = AttainmentService.calculate(course, semester, class_scope)
         if summary["student_count"] <= 0:
@@ -66,10 +66,54 @@ class CourseInsightService:
         return cls._deserialize_record(record)
 
     @classmethod
+    def save_manual_for_scope(cls, course_id: int, semester: str, class_scope: str, overview_text: str, improvement_text: str):
+        """保存教师手工编辑的第五章内容，报告预览和 Word 导出会直接复用。"""
+        record = cls.get_record(course_id, semester, class_scope)
+        if not record:
+            record = CourseInsight(
+                course_id=course_id,
+                semester=semester,
+                class_scope=class_scope,
+            )
+
+        overview_text = str(overview_text or "").strip()
+        improvement_text = str(improvement_text or "").strip()
+        improvement_actions = []
+        if improvement_text:
+            improvement_actions.append(
+                {
+                    "title": "教师确认的持续改进措施",
+                    "related_objective": "",
+                    "problem": overview_text,
+                    "action": improvement_text,
+                    "expected_effect": "用于下一轮课程教学质量改进与报告归档。",
+                    "priority": "中",
+                }
+            )
+
+        record.provider = "人工编辑"
+        record.model_name = "manual"
+        record.prompt_version = "manual-v1"
+        record.overview_text = overview_text
+        record.objective_analysis_json = json.dumps([], ensure_ascii=False)
+        record.improvement_json = json.dumps(improvement_actions, ensure_ascii=False)
+        record.raw_response_json = json.dumps(
+            {
+                "source": "manual_edit",
+                "overview_text": overview_text,
+                "improvement_text": improvement_text,
+            },
+            ensure_ascii=False,
+        )
+        db.session.add(record)
+        db.session.commit()
+        return cls._deserialize_record(record)
+
+    @classmethod
     def _provider_label(cls) -> str:
         base = (current_app.config.get("LLM_API_BASE") or "").lower()
         if "deepseek" in base:
-            return "LLM"
+            return "智能生成"
         return "LLM"
 
     @classmethod

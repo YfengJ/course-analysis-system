@@ -1,5 +1,9 @@
-# Local sample data
+# 示例数据说明
 
-This directory is intentionally empty in the public repository.
+本目录提供系统演示所需的示例数据：
 
-Place your own local teaching outlines, score files, or report templates here when testing the system. Do not commit real course, student, or report data.
+- `sample_scores.csv`：标准成绩导入模板，可直接在“成绩导入”页面上传。
+- `sample_column_mapping.json`：列名映射说明，便于展示系统的兼容导入能力。
+- `sample_course_config.json`：默认课程模板数据摘要。
+
+项目初始化后，数据库还会自动写入一套“大数据存储技术”演示课程、课程目标、考核项和 168 名学生成绩数据。

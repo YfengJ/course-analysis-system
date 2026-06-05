@@ -1,6 +1,11 @@
+from datetime import datetime
+from pathlib import Path
+
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 
-from models import Course, ImportBatch, Report, Student
+from models import Course, ImportBatch, Report, Student, db
+from services.course_archive_service import CourseArchiveService
+from services.report_quality_service import ReportQualityService
 from services.report_service import ReportService
 from services.seed_service import DEFAULT_SEMESTER
 
@@ -56,6 +61,24 @@ def preview(course_id: int):
     )
 
 
+@report_bp.route("/quality")
+def quality_check(course_id: int):
+    course = Course.query.get(course_id)
+    if not course:
+        abort(404)
+    semester, class_scope = resolve_report_scope(course)
+    strict = (request.args.get("strict") or "").lower() in {"1", "true", "yes", "final"}
+    result = ReportQualityService.check_course_report(course, semester, class_scope, strict=strict)
+    return render_template(
+        "reports/quality.html",
+        course=course,
+        semester=semester,
+        class_scope=class_scope,
+        quality=result,
+        title=f"{course.name} - 报告质量检查",
+    )
+
+
 @report_bp.route("/export-word")
 def export_word(course_id: int):
     course = Course.query.get(course_id)
@@ -81,7 +104,47 @@ def export_word(course_id: int):
     return redirect(url_for("report.download_report", course_id=course.id, report_id=report.id))
 
 
+@report_bp.route("/export-archive-package")
+def export_archive_package(course_id: int):
+    course = Course.query.get(course_id)
+    if not course:
+        abort(404)
+    semester, class_scope = resolve_report_scope(course)
+    try:
+        archive_path = CourseArchiveService.build_archive(course, semester, class_scope, current_app.config["EXPORT_FOLDER"])
+    except Exception as exc:
+        flash(f"课程归档包生成失败：{exc}", "danger")
+        return redirect(url_for("report.preview", course_id=course.id, semester=semester, class_scope=class_scope))
+    return send_file(archive_path, as_attachment=True, download_name=Path(archive_path).name)
+
+
 @report_bp.route("/download/<int:report_id>")
 def download_report(course_id: int, report_id: int):
     report = Report.query.get_or_404(report_id)
+    if report.course_id != course_id:
+        abort(404)
+    if not report.word_path or not Path(report.word_path).exists():
+        abort(404)
     return send_file(report.word_path, as_attachment=True)
+
+
+@report_bp.route("/<int:report_id>/archive", methods=["POST"])
+def archive_report(course_id: int, report_id: int):
+    course = Course.query.get(course_id)
+    if not course:
+        abort(404)
+    report = Report.query.get_or_404(report_id)
+    if report.course_id != course.id:
+        abort(404)
+
+    quality = ReportQualityService.check_course_report(course, report.semester, report.class_scope, strict=True)
+    if not quality["ready"]:
+        flash("质量检查未通过，暂不能归档最终版。请先处理阻断项。", "warning")
+        return redirect(url_for("report.quality_check", course_id=course.id, semester=report.semester, class_scope=report.class_scope, strict="1"))
+
+    report.is_archived = True
+    report.archived_at = datetime.utcnow()
+    report.archive_note = (request.form.get("archive_note") or "教师确认归档").strip()
+    db.session.commit()
+    flash(f"报告 v{report.report_version or 1} 已归档为最终版。", "success")
+    return redirect(url_for("report.preview", course_id=course.id, semester=report.semester, class_scope=report.class_scope))

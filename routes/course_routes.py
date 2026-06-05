@@ -1,13 +1,15 @@
 import json
 from datetime import datetime
 
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from forms import CourseCreateForm, CourseForm, ObjectiveForm, OutlineUploadForm
 from models import (
     AnalysisRun,
+    AnalysisRevision,
+    AnalysisSnapshot,
     Assessment,
     Course,
     CourseInsight,
@@ -24,6 +26,7 @@ from models import (
     db,
 )
 from services.course_progress_service import CourseProgressService
+from services.auth_service import AuthService
 from services.import_service import ImportService
 from services.seed_service import create_generic_course_structure
 from services.template_adapters.outline_template_adapter import OutlineTemplateAdapter
@@ -93,6 +96,9 @@ def create_course():
     if form.validate_on_submit():
         course = Course()
         form.populate_obj(course)
+        current_user = AuthService.current_user()
+        if current_user:
+            course.owner_user_id = current_user.id
         db.session.add(course)
         db.session.flush()
         create_generic_course_structure(course)
@@ -118,6 +124,9 @@ def create_course_from_outline():
     parsed = OutlineTemplateAdapter.extract(file_path)["payload"]
 
     course = _build_course_from_outline_payload(parsed)
+    current_user = AuthService.current_user()
+    if current_user:
+        course.owner_user_id = current_user.id
     db.session.add(course)
     db.session.flush()
     create_generic_course_structure(course)
@@ -137,7 +146,13 @@ def index():
     keyword = (request.args.get("keyword") or "").strip()
     status_filter = request.args.get("status", "all")
 
-    courses = Course.query.order_by(Course.updated_at.desc()).all()
+    course_query = Course.query
+    current_user = AuthService.current_user()
+    if current_user and current_user.role != "admin":
+        course_query = course_query.filter(
+            or_(Course.owner_user_id.is_(None), Course.owner_user_id == current_user.id)
+        )
+    courses = course_query.order_by(Course.updated_at.desc()).all()
     course_rows = []
     summary = {
         "all": 0,
@@ -192,6 +207,8 @@ def index():
 @course_bp.route("/<int:course_id>/delete", methods=["POST"])
 def delete_course(course_id: int):
     course = get_course_or_404(course_id)
+    if not AuthService.can_manage_course(course):
+        abort(403)
     course_name = course.name
 
     student_ids = [item.id for item in Student.query.with_entities(Student.id).filter_by(course_id=course.id)]
@@ -228,6 +245,8 @@ def delete_course(course_id: int):
     CourseInsight.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     Report.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     AnalysisRun.query.filter_by(course_id=course.id).delete(synchronize_session=False)
+    AnalysisSnapshot.query.filter_by(course_id=course.id).delete(synchronize_session=False)
+    AnalysisRevision.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     ImportBatch.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     TeachingOutline.query.filter_by(course_id=course.id).delete(synchronize_session=False)
     db.session.delete(course)
@@ -319,15 +338,36 @@ def show_outline(course_id: int):
     course = get_course_or_404(course_id)
     form = OutlineUploadForm()
     parsed_outline = None
+    pending_outline = session.get("pending_outline_import")
+
+    if request.method == "POST" and request.form.get("action") == "confirm_pending":
+        pending_outline = session.get("pending_outline_import") or {}
+        if pending_outline.get("course_id") != course.id:
+            flash("没有找到可确认的教学大纲预览结果，请重新上传并预览。", "warning")
+            return redirect(url_for("course.show_outline", course_id=course.id))
+        outline, _ = ImportService.import_outline(Path(pending_outline["file_path"]), course)
+        session.pop("pending_outline_import", None)
+        flash(f"教学大纲已确认导入并同步：{outline.filename}", "success")
+        return redirect(url_for("course.show_outline", course_id=course.id))
 
     if form.validate_on_submit():
         file_path = ImportService.save_upload(form.file.data, current_app.config["UPLOAD_FOLDER"])
-        outline, parsed_outline = ImportService.import_outline(file_path, course)
-        flash(f"教学大纲已导入并解析：{outline.filename}", "success")
-        return redirect(url_for("course.show_outline", course_id=course.id))
+        adapter_result = OutlineTemplateAdapter.extract(file_path)
+        parsed_outline = adapter_result["payload"]
+        parsed_outline["source_template"] = file_path.name
+        session["pending_outline_import"] = {
+            "course_id": course.id,
+            "file_path": str(file_path),
+            "filename": file_path.name,
+            "parsed": parsed_outline,
+        }
+        pending_outline = session["pending_outline_import"]
+        flash("教学大纲解析预览已生成，请确认后再写入课程配置。", "success")
 
     latest_outline = TeachingOutline.query.filter_by(course_id=course.id).order_by(TeachingOutline.created_at.desc()).first()
-    if latest_outline and latest_outline.parsed_json:
+    if not parsed_outline and pending_outline and pending_outline.get("course_id") == course.id:
+        parsed_outline = pending_outline.get("parsed")
+    if not parsed_outline and latest_outline and latest_outline.parsed_json:
         parsed_outline = json.loads(latest_outline.parsed_json)
     return render_template(
         "courses/outline.html",
@@ -335,6 +375,7 @@ def show_outline(course_id: int):
         form=form,
         outline=latest_outline,
         parsed_outline=parsed_outline,
+        pending_outline=pending_outline if pending_outline and pending_outline.get("course_id") == course.id else None,
         assessments=Assessment.query.filter_by(course_id=course.id).order_by(Assessment.sequence.asc()).all(),
         title=f"{course.name} - 教学大纲",
     )

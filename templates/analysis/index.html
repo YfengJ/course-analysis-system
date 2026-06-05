@@ -26,7 +26,7 @@
 
 <div class="panel-card mb-4 reveal">
     <div class="section-head">
-        <div><h2>本页数据说明</h2><p>直接说明：哪些是文件直接读取，哪些是系统规则计算，哪些是 AI 生成。</p></div>
+        <div><h2>本页数据说明</h2><p>直接说明：哪些是文件直接读取，哪些是系统规则计算，哪些是智能建议或教师编辑。</p></div>
     </div>
     <div class="source-legend-grid">
         <div class="simple-card">
@@ -44,9 +44,9 @@
         </div>
         <div class="simple-card">
             <div class="source-badges">
-                <span class="source-badge source-ai">AI 生成</span>
+                <span class="source-badge source-ai">智能建议</span>
             </div>
-            <p class="mb-0">只有第五章“评价结果分析与持续改进措施”属于 AI 生成内容，而且必须在 AI 页面手动点击后才会生成。</p>
+            <p class="mb-0">第五章“评价结果分析与持续改进措施”可由智能建议生成，也可由教师人工编辑，必须手动保存后才会写入报告。</p>
         </div>
     </div>
 </div>
@@ -68,6 +68,7 @@
         <h3>成绩已导入，尚未执行第四章计算</h3>
         <p>为了把“导入数据”和“生成分析结果”分开，这里需要你手动点击一次计算按钮。计算完成后，本页才会展示定量、定性、分布和第五章入口。</p>
         <form method="post" class="d-flex gap-2 justify-content-center flex-wrap mt-4">
+            <input type="hidden" name="action" value="recalculate">
             <input type="hidden" name="semester" value="{{ summary.semester }}">
             <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">
             <button type="submit" class="btn btn-dark">开始计算第四章数据</button>
@@ -246,7 +247,7 @@
 
 <div class="panel-card mb-4 reveal">
     <div class="section-head">
-        <div><h2>（二）课程教学目标达成情况定性评价</h2><p>系统优先采用标准报告模板中已有的优、良、中、差统计；未提供时再按学生课程目标达成率自动划档，并按 90、80、70、60 赋分生成定性达成度。</p></div>
+        <div><h2>（二）课程教学目标达成情况定性评价</h2><p>系统按学生课程目标达成率自动划档，并按 90、80、70、60 赋分生成定性达成度；教师修订保存后会同步进入报告。</p></div>
     </div>
     <div class="table-responsive">
         <table class="table modern-table align-middle">
@@ -269,6 +270,69 @@
             </tbody>
         </table>
     </div>
+</div>
+
+<div class="panel-card mb-4 reveal">
+    <div class="section-head">
+        <div><h2>人工修订与版本快照</h2><p>用于保留教师确认后的等级分布和分析说明，保存后会生成一条新的分析快照。</p></div>
+        <form method="post" class="d-flex gap-2 flex-wrap">
+            <input type="hidden" name="action" value="recalculate">
+            <input type="hidden" name="semester" value="{{ summary.semester }}">
+            <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">
+            <button type="submit" class="btn btn-outline-dark">重新计算</button>
+        </form>
+    </div>
+    <form method="post">
+        <input type="hidden" name="action" value="save_revision">
+        <input type="hidden" name="semester" value="{{ summary.semester }}">
+        <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">
+        <div class="table-responsive">
+            <table class="table modern-table align-middle">
+                <thead>
+                <tr><th>课程目标</th><th>优</th><th>良</th><th>中</th><th>差</th><th>当前达成度</th></tr>
+                </thead>
+                <tbody>
+                {% for item in summary.objective_results %}
+                <tr>
+                    <td>
+                        <strong>{{ item.objective_title }}</strong>
+                        <small class="d-block text-muted">{{ item.objective_description }}</small>
+                    </td>
+                    <td><input type="number" min="0" class="form-control" name="excellent_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['优'] }}"></td>
+                    <td><input type="number" min="0" class="form-control" name="good_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['良'] }}"></td>
+                    <td><input type="number" min="0" class="form-control" name="medium_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['中'] }}"></td>
+                    <td><input type="number" min="0" class="form-control" name="poor_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['差'] }}"></td>
+                    <td>{{ "%.2f"|format(item.qualitative_attainment) }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="row g-3 mt-2">
+            <div class="col-md-6">
+                <label class="form-label" for="analysis_note">结果分析说明</label>
+                <textarea id="analysis_note" name="analysis_note" class="form-control" rows="4">{{ analysis_revision.analysis_note if analysis_revision else '' }}</textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="improvement_note">持续改进说明</label>
+                <textarea id="improvement_note" name="improvement_note" class="form-control" rows="4">{{ analysis_revision.improvement_note if analysis_revision else '' }}</textarea>
+            </div>
+        </div>
+        <div class="d-flex gap-2 justify-content-end flex-wrap mt-3">
+            <button type="submit" class="btn btn-dark">保存修订并同步报告</button>
+            <a href="{{ url_for('report.preview', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-outline-dark">查看报告预览</a>
+        </div>
+    </form>
+    {% if analysis_snapshots %}
+    <div class="evidence-list mt-4">
+        {% for snapshot in analysis_snapshots[:5] %}
+        <div class="simple-card">
+            <strong>分析快照 v{{ snapshot.version_no }}</strong>
+            <p class="mb-0">{{ snapshot.created_at.strftime('%Y-%m-%d %H:%M') }} / {{ snapshot.change_note }} / 学生 {{ snapshot.student_count }} 人 / 定量 {{ "%.2f"|format(snapshot.quantitative_attainment) }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 <div class="row g-4 mb-4 reveal">
@@ -311,7 +375,7 @@
 {% set calc = summary.chapter_four.calculation_details %}
 <div class="panel-card mb-4 reveal calculation-panel">
     <div class="section-head">
-        <div><h2>计算过程说明</h2><p>把本页涉及到的计算结果逐项展开，便于演示时说明“这些数是怎么来的”。</p></div>
+        <div><h2>计算过程说明</h2><p>把本页涉及到的计算结果逐项展开，便于复核时说明“这些数是怎么来的”。</p></div>
         <div class="section-kicker">规则计算透明化</div>
     </div>
     {% set source_tags = [{'kind': 'direct', 'label': '成绩文件'}, {'kind': 'manual', 'label': '权重配置'}, {'kind': 'computed', 'label': '公式计算'}] %}
@@ -349,7 +413,7 @@
 
     <div class="calculation-section">
         <h3>2. 定性达成度如何计算</h3>
-        <p>系统优先采用标准报告模板中已有的优、良、中、差统计；未提供时再按学生课程目标达成率划档，最后按 90、80、70、60 赋分得到每个课程目标的定性达成度。</p>
+        <p>系统先按学生课程目标达成率划档，再按 90、80、70、60 赋分得到每个课程目标的定性达成度；如果教师在上方保存人工修订，则以修订后的等级人数重新计算并同步报告。</p>
         {% for item in calc.qualitative_steps %}
         <details class="calculation-step">
             <summary><span>{{ item.title }}</span><strong>{{ item.result }}</strong></summary>
@@ -447,10 +511,10 @@
     <div class="col-lg-6">
         <div class="panel-card">
             <div class="section-head">
-                <div><h2>第五章 AI评价结果分析</h2><p>第五章已改为显式生成模式，避免自动拼接公式化文本。</p></div>
+                <div><h2>第五章评价结果分析</h2><p>第五章已改为显式保存模式，避免自动拼接公式化文本。</p></div>
             </div>
-            {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': 'AI 生成'}] %}
-            {% set source_text = '这里的文字不是固定模板，也不是直接读取文件，而是系统把第四章计算结果、课程目标和教学大纲一起交给大模型后生成的。' %}
+            {% set source_tags = [{'kind': 'computed', 'label': '第四章结果'}, {'kind': 'direct', 'label': '教学大纲'}, {'kind': 'ai', 'label': '智能建议'}, {'kind': 'manual', 'label': '教师编辑'}] %}
+            {% set source_text = '这里的文字不是固定模板，也不是直接读取文件，而是由教师在第五章页面保存：可以使用智能建议，也可以手工编辑。' %}
             {% include "partials/source_note.html" %}
             {% if insight_payload %}
             <article class="simple-card insight-card">
@@ -464,7 +528,7 @@
             {% else %}
             <div class="empty-panel">
                 <h3>第五章尚未生成</h3>
-                <p>当前分析页只负责展示第四章的数据证据。若要生成更贴合课程内容和大纲的第五章，请前往 AI 评价与改进页面手动生成。</p>
+                <p>当前分析页只负责展示第四章的数据证据。若要生成或编辑第五章，请前往评价与改进页面手动保存。</p>
             </div>
             {% endif %}
         </div>
@@ -478,14 +542,14 @@
             <div class="stack-grid mb-3">
                 <article class="simple-card insight-card">
                     {% if insight_payload %}
-                    已存在一份保存结果。你可以进入 AI 页面查看完整结构化内容，或重新生成覆盖当前范围下的旧结果。
+                    已存在一份保存结果。你可以进入评价与改进页面查看完整结构化内容，或重新编辑当前范围下的旧结果。
                     {% else %}
                     当前报告预览页会显示“尚未生成”的空状态，不会再自动写入公式化第五章文本。
                     {% endif %}
                 </article>
             </div>
             <div class="d-flex gap-2 flex-wrap">
-                <a href="{{ url_for('insight.show', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-dark">去 AI 页面生成</a>
+                <a href="{{ url_for('insight.show', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-dark">去编辑第五章</a>
                 <a href="{{ url_for('report.preview', course_id=course.id, semester=summary.semester, class_scope=summary.class_scope) }}" class="btn btn-outline-dark">查看报告状态</a>
             </div>
         </div>

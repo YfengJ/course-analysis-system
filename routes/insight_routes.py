@@ -27,11 +27,22 @@ def show(course_id: int):
 
     if request.method == "POST":
         if not analysis_ready:
-            flash("请先完成第四章计算，再生成第五章 AI 分析内容。", "warning")
+            flash("请先完成第四章计算，再生成或保存第五章内容。", "warning")
         else:
             try:
-                CourseInsightService.generate_for_scope(course, selected_semester, class_scope)
-                flash("已生成并保存当前统计范围的评价结果分析与持续改进措施。", "success")
+                action = (request.form.get("action") or "generate").strip()
+                if action == "save_manual":
+                    CourseInsightService.save_manual_for_scope(
+                        course.id,
+                        selected_semester,
+                        class_scope,
+                        overview_text=request.form.get("overview_text", ""),
+                        improvement_text=request.form.get("improvement_text", ""),
+                    )
+                    flash("已保存教师人工编辑的第五章内容，报告预览和 Word 导出将同步使用。", "success")
+                else:
+                    CourseInsightService.generate_for_scope(course, selected_semester, class_scope)
+                    flash("已生成并保存当前统计范围的评价结果分析与持续改进措施。", "success")
             except RuntimeError as exc:
                 flash(str(exc), "warning")
             except Exception as exc:  # noqa: BLE001
@@ -74,5 +85,5 @@ def show(course_id: int):
         analysis_ready=analysis_ready,
         insight_payload=insight_payload,
         llm_ready=LLMService.is_configured(),
-        title=f"{course.name} - AI评价与改进",
+        title=f"{course.name} - 评价与改进",
     )

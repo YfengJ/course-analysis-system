@@ -19,7 +19,7 @@ def index():
         course_cards.append(
             {
                 "course": course,
-                "is_sample": False,
+                "is_sample": course.code == "110842105",
                 "outline_count": outline_count,
                 "report_count": report_count,
                 "student_count": snapshot["student_count"],
