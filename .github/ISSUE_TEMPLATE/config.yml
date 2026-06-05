@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Privacy-sensitive report
+    url: https://github.com/YfengJ/course-analysis-system/security/policy
+    about: Do not post secrets, private course files, or student data in public issues.
