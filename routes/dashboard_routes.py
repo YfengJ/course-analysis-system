@@ -2,6 +2,7 @@ from flask import Blueprint, render_template
 
 from models import Course, Report, TeachingOutline
 from services.course_progress_service import CourseProgressService
+from services.seed_service import DEFAULT_COURSE_CODE
 
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -19,7 +20,7 @@ def index():
         course_cards.append(
             {
                 "course": course,
-                "is_sample": course.code == "110842105",
+                "is_sample": course.code == DEFAULT_COURSE_CODE,
                 "outline_count": outline_count,
                 "report_count": report_count,
                 "student_count": snapshot["student_count"],
