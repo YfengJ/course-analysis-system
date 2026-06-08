@@ -4,6 +4,7 @@ All notable public-facing changes are tracked here.
 
 ## Unreleased
 
+- Added a public release checklist for privacy, packaging, and GitHub maintenance checks.
 - Set the English README as the repository homepage and added a Chinese README switch.
 - Added sanitized interface screenshots for the dashboard, analysis page, and report preview.
 - Added GitHub issue templates, pull request template, CI workflow, contribution guide, and security policy.
