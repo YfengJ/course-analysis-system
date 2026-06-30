@@ -4,6 +4,7 @@ All notable public-facing changes are tracked here.
 
 ## Unreleased
 
+- Added Dependabot maintenance checks for GitHub Actions, Python dependencies, and npm dependencies.
 - Added a public release checklist for privacy, packaging, and GitHub maintenance checks.
 - Set the English README as the repository homepage and added a Chinese README switch.
 - Added sanitized interface screenshots for the dashboard, analysis page, and report preview.
