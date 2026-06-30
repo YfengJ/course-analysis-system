@@ -11,7 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "bootstrap": "^5.3.3",
+    "bootstrap": "^5.3.8",
     "echarts": "^5.5.1",
     "mermaid": "^10.9.3",
     "playwright": "^1.58.2"
