@@ -10,7 +10,7 @@
 ] %}
 {% include "partials/page_intro.html" %}
 
-<div class="panel-card mb-4 reveal">
+<div class="panel-card filter-bar mb-3 reveal">
     <form method="get" class="row g-3 align-items-end">
         <div class="col-lg-5">
             <label class="form-label">关键词</label>
@@ -31,24 +31,19 @@
     </form>
 </div>
 
-<div class="panel-card mb-4 reveal">
-    <div class="section-head">
-        <div>
-            <h2>状态说明</h2>
-            <p>这里的状态不是笼统的“已分析/未分析”，而是按主流程精确标记当前卡在哪一步。</p>
-        </div>
-    </div>
-    <div class="source-legend-grid">
-        <div class="simple-card"><strong>待上传大纲</strong><p class="mb-0">课程已建立，但还没有导入教学大纲。</p></div>
-        <div class="simple-card"><strong>待导入成绩</strong><p class="mb-0">教学大纲已就绪，但还没有导入成绩文件。</p></div>
-        <div class="simple-card"><strong>待计算第四章</strong><p class="mb-0">成绩已导入，但还没有在分析页手动点击“开始计算第四章数据”。</p></div>
-        <div class="simple-card"><strong>可预览报告 / 已生成报告</strong><p class="mb-0">第四章已经算完，可进入报告预览；若已导出正式 Word，会显示为“已生成报告”。</p></div>
+<div class="status-legend mb-3 reveal" aria-label="课程状态说明">
+    <strong>状态说明</strong>
+    <div class="status-legend-items">
+        <span><i class="legend-dot pending"></i>待上传大纲</span>
+        <span><i class="legend-dot pending"></i>待导入成绩</span>
+        <span><i class="legend-dot pending"></i>待计算第四章</span>
+        <span><i class="legend-dot ready"></i>可预览或已生成报告</span>
     </div>
 </div>
 
 <div class="course-directory reveal">
     {% for item in course_rows %}
-    <article class="directory-card">
+    <article class="directory-card course-directory-row">
         <div class="directory-head">
             <div>
                 <h2>{{ item.course.name }}</h2>

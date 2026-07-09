@@ -1,6 +1,6 @@
-import unittest
 import os
 from pathlib import Path
+import unittest
 
 from app import create_app
 from config import TestingConfig
@@ -17,8 +17,8 @@ CLASS_A_SCORE = DATA_DIR / os.getenv("COURSE_SYSTEM_REAL_CLASS_A_FILE", "class_a
 CLASS_B_SCORE = DATA_DIR / os.getenv("COURSE_SYSTEM_REAL_CLASS_B_FILE", "class_b.xlsm")
 
 
-@unittest.skipUnless(OUTLINE_PATH.exists(), "算法设计与分析教学大纲文件不存在")
-class AlgorithmOutlineParsingTest(unittest.TestCase):
+@unittest.skipUnless(OUTLINE_PATH.exists(), "真实教学大纲样例文件不存在")
+class RealOutlineParsingTest(unittest.TestCase):
     def test_spaced_course_objectives_are_extracted_from_outline(self):
         payload = OutlineTemplateAdapter.extract(OUTLINE_PATH)["payload"]
 
@@ -47,7 +47,7 @@ class AlgorithmOutlineParsingTest(unittest.TestCase):
     OUTLINE_PATH.exists() and CLASS_A_SCORE.exists() and CLASS_B_SCORE.exists(),
     "真实教学大纲和成绩样例文件不存在",
 )
-class AlgorithmImportIntegrationTest(unittest.TestCase):
+class RealImportIntegrationTest(unittest.TestCase):
     def setUp(self):
         self.app = create_app(TestingConfig)
         self.app_context = self.app.app_context()

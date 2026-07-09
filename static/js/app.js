@@ -96,6 +96,32 @@ if (window.mermaid) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    const navToggle = document.querySelector(".navbar-toggle");
+    const primaryNavigation = document.getElementById("primary-navigation");
+    if (navToggle && primaryNavigation) {
+        const setNavigationOpen = (open) => {
+            primaryNavigation.classList.toggle("is-open", open);
+            navToggle.setAttribute("aria-expanded", String(open));
+            navToggle.setAttribute("aria-label", open ? "关闭主导航" : "打开主导航");
+        };
+
+        navToggle.addEventListener("click", () => {
+            setNavigationOpen(!primaryNavigation.classList.contains("is-open"));
+        });
+        primaryNavigation.querySelectorAll(".main-nav a").forEach((link) => {
+            link.addEventListener("click", () => setNavigationOpen(false));
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && primaryNavigation.classList.contains("is-open")) {
+                setNavigationOpen(false);
+                navToggle.focus();
+            }
+        });
+        window.addEventListener("resize", () => {
+            if (window.innerWidth >= 992) setNavigationOpen(false);
+        });
+    }
+
     const revealNodes = document.querySelectorAll(".reveal");
     const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {

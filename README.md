@@ -6,14 +6,27 @@ A local web system for course objective attainment analysis, report generation, 
 
 ## Screenshots
 
+### Compact Course Workbench
+
+The dashboard prioritizes current course status, evidence readiness, report progress, and the next actionable step. Course records are presented as a scan-friendly work queue instead of a marketing-style hero page.
+
 ![Course Dashboard](docs/images/dashboard.png)
 
+### Evidence-Led Attainment Analysis
+
+The analysis page keeps scope filters, provenance notes, key metrics, charts, calculation tables, and manual revisions in a consistent operational hierarchy.
+
 ![Attainment Analysis](docs/images/analysis.png)
+
+### Report Review And Export
+
+The report workspace separates review actions from report content and keeps source labels visible before Word export, quality checks, or archive packaging.
 
 ![Report Preview](docs/images/report-preview.png)
 
 ## Features
 
+- Teacher-oriented workbench: compact course queue, explicit next actions, consistent workflow tabs, responsive navigation, keyboard focus states, and mobile-safe report tables.
 - Course management: maintain course metadata, objectives, graduation requirement indicators, and assessment weights.
 - Syllabus parsing: extract course information, objective descriptions, requirement mappings, and assessment support relationships from `.docx` syllabi.
 - Score import precheck: supports `.xls/.xlsx/.xlsm/.csv` and multiple class files in one import; the system previews student count, classes, sheets, column mappings, and score issues before writing to the database.
@@ -114,7 +127,7 @@ python scripts/run_tests.py
 If local course test files are available, you can also run:
 
 ```bash
-python -m unittest tests/test_algorithm_outline_and_multi_import.py
+python -m unittest tests/test_real_fixture_import.py
 ```
 
 ## Project Structure

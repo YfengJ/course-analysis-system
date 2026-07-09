@@ -10,6 +10,7 @@ EXCLUDED_DIRS = {
     ".playwright-cli",
     ".pytest_cache",
     ".ruff_cache",
+    ".superpowers",
     ".venv",
     "__pycache__",
     "datasoruce",

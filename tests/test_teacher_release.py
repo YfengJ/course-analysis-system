@@ -19,6 +19,7 @@ class ReleasePackageTest(unittest.TestCase):
         self.assertIn("docs/部署与使用说明.md", files)
         self.assertNotIn("scripts/build_teacher_release.py", files)
         self.assertNotIn("generate_thesis_docs.py", files)
+        self.assertFalse(any(item.startswith(".superpowers/") for item in files))
         self.assertFalse(any(item.startswith("docs/superpowers/") for item in files))
         self.assertNotIn("scripts/revise_thesis_figures_0430.py", files)
         self.assertFalse(any(item.startswith("instance/") for item in files))
@@ -37,7 +38,8 @@ class ReleasePackageTest(unittest.TestCase):
             "毕业" + "设计",
             "答" + "辩",
             "graduation" + "-" + "design",
-            "/" + "Users" + "/" + "yfengj",
+            str(Path.home()),
+            Path.home().name,
             "Desk" + "top",
         )
         secret_key_pattern = re.compile(r"sk-[A-Za-z0-9]{16,}")

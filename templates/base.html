@@ -10,8 +10,6 @@
 </head>
 <body>
 <div class="page-shell">
-    <div class="ambient ambient-a"></div>
-    <div class="ambient ambient-b"></div>
     <header class="site-header">
         <div class="container-xxl">
             <div class="header-bar">
@@ -29,32 +27,39 @@
                         <strong>{{ system_name }}</strong>
                     </span>
                 </a>
-                <nav class="main-nav">
-                    <a class="{{ 'active' if request.endpoint == 'dashboard.index' else '' }}" href="{{ url_for('dashboard.index') }}">课程工作台</a>
-                    <a class="{{ 'active' if request.endpoint == 'course.index' else '' }}" href="{{ url_for('course.index') }}">课程列表</a>
-                    <a class="{{ 'active' if request.endpoint == 'report_center.index' else '' }}" href="{{ url_for('report_center.index') }}">报告中心</a>
-                    <a class="{{ 'active' if (request.endpoint or '').startswith('admin.') else '' }}" href="{{ url_for('admin.backups') }}">数据维护</a>
-                    <a class="{{ 'active' if request.endpoint == 'guide.index' else '' }}" href="{{ url_for('guide.index') }}">系统使用说明</a>
-                </nav>
-                {% if not login_disabled and current_user %}
-                <div class="user-menu dropdown">
-                    <button class="quick-create user-menu-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        {{ current_user.display_name }}
-                    </button>
-                    <div class="dropdown-menu dropdown-menu-end user-menu-panel">
-                        <div class="user-menu-meta">
-                            <strong>{{ current_user.display_name }}</strong>
-                            <span>{{ current_user.username }} / {{ current_user.role }}</span>
+                <button class="navbar-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false" aria-label="打开主导航">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+                <div id="primary-navigation" class="header-navigation">
+                    <nav class="main-nav" aria-label="主导航">
+                        <a class="{{ 'active' if request.endpoint == 'dashboard.index' else '' }}" href="{{ url_for('dashboard.index') }}" {% if request.endpoint == 'dashboard.index' %}aria-current="page"{% endif %}>课程工作台</a>
+                        <a class="{{ 'active' if request.endpoint == 'course.index' else '' }}" href="{{ url_for('course.index') }}" {% if request.endpoint == 'course.index' %}aria-current="page"{% endif %}>课程列表</a>
+                        <a class="{{ 'active' if request.endpoint == 'report_center.index' else '' }}" href="{{ url_for('report_center.index') }}" {% if request.endpoint == 'report_center.index' %}aria-current="page"{% endif %}>报告中心</a>
+                        <a class="{{ 'active' if (request.endpoint or '').startswith('admin.') else '' }}" href="{{ url_for('admin.backups') }}" {% if (request.endpoint or '').startswith('admin.') %}aria-current="page"{% endif %}>数据维护</a>
+                        <a class="{{ 'active' if request.endpoint == 'guide.index' else '' }}" href="{{ url_for('guide.index') }}" {% if request.endpoint == 'guide.index' %}aria-current="page"{% endif %}>系统使用说明</a>
+                    </nav>
+                    {% if not login_disabled and current_user %}
+                    <div class="user-menu dropdown">
+                        <button class="quick-create user-menu-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            {{ current_user.display_name }}
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end user-menu-panel">
+                            <div class="user-menu-meta">
+                                <strong>{{ current_user.display_name }}</strong>
+                                <span>{{ current_user.username }} / {{ current_user.role }}</span>
+                            </div>
+                            <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">修改密码</a>
+                            <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+                                <button type="submit" class="dropdown-item">退出登录</button>
+                            </form>
                         </div>
-                        <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">修改密码</a>
-                        <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
-                            <button type="submit" class="dropdown-item">退出登录</button>
-                        </form>
                     </div>
+                    {% else %}
+                    <a class="quick-create" href="{{ url_for('course.create_course') }}">开始建课</a>
+                    {% endif %}
                 </div>
-                {% else %}
-                <a class="quick-create" href="{{ url_for('course.create_course') }}">开始建课</a>
-                {% endif %}
             </div>
         </div>
     </header>

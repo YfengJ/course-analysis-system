@@ -4,6 +4,9 @@ All notable public-facing changes are tracked here.
 
 ## Unreleased
 
+- Redesigned the interface as a compact course workbench with clearer course status, next actions, workflow navigation, and report review hierarchy.
+- Added accessible responsive navigation, visible keyboard focus states, reduced-motion support, and mobile-safe report tables.
+- Refreshed all public screenshots with sanitized demo data from the new interface.
 - Added Dependabot maintenance checks for GitHub Actions, Python dependencies, and npm dependencies.
 - Added a public release checklist for privacy, packaging, and GitHub maintenance checks.
 - Set the English README as the repository homepage and added a Chinese README switch.
