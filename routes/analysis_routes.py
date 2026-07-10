@@ -1,13 +1,14 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from forms import AnalysisFilterForm
-from models import Course, Student
+from models import Course, Student, db
 from services.analysis_revision_service import AnalysisRevisionService
 from services.analysis_run_service import AnalysisRunService
 from services.attainment_service import AttainmentService
 from services.chart_service import ChartService
 from services.course_insight_service import CourseInsightService
 from services.seed_service import DEFAULT_SEMESTER
+from services.auth_service import AuthService
 
 
 analysis_bp = Blueprint("analysis", __name__, url_prefix="/courses/<int:course_id>/analysis")
@@ -15,7 +16,7 @@ analysis_bp = Blueprint("analysis", __name__, url_prefix="/courses/<int:course_i
 
 @analysis_bp.route("/", methods=["GET", "POST"])
 def index(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     semesters = sorted({item.semester for item in Student.query.filter_by(course_id=course.id).all()}) or [DEFAULT_SEMESTER]
@@ -49,6 +50,22 @@ def index(course_id: int):
                         "medium_count": request.form.get(f"medium_count_{objective_id}", 0),
                         "poor_count": request.form.get(f"poor_count_{objective_id}", 0),
                     }
+                revision_errors = AnalysisRevisionService.validate_qualitative_overrides(
+                    summary,
+                    qualitative_overrides,
+                )
+                if revision_errors:
+                    for error in revision_errors:
+                        flash(error, "warning")
+                    return redirect(
+                        url_for(
+                            "analysis.index",
+                            course_id=course.id,
+                            semester=semester,
+                            class_scope=class_scope,
+                        )
+                    )
+                current_user = AuthService.current_user()
                 AnalysisRevisionService.save_revision(
                     course.id,
                     semester,
@@ -56,6 +73,7 @@ def index(course_id: int):
                     qualitative_overrides=qualitative_overrides,
                     analysis_note=request.form.get("analysis_note", ""),
                     improvement_note=request.form.get("improvement_note", ""),
+                    created_by=current_user.display_name if current_user else "教师",
                 )
                 summary, _ = AnalysisRevisionService.apply_active_revision(summary, course.id, semester, class_scope)
                 change_note = "教师人工修订"

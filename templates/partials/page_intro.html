@@ -19,7 +19,14 @@
         {% if intro_actions %}
         <div class="headline-actions">
             {% for action in intro_actions %}
+            {% if action.method == 'post' %}
+            <form method="post" action="{{ action.href }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn {{ action.class or 'btn-outline-dark' }}">{{ action.label }}</button>
+            </form>
+            {% else %}
             <a href="{{ action.href }}" class="btn {{ action.class or 'btn-outline-dark' }}">{{ action.label }}</a>
+            {% endif %}
             {% endfor %}
         </div>
         {% endif %}

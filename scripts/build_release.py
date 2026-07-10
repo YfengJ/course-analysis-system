@@ -47,6 +47,7 @@ EXCLUDED_SUFFIXES = {
 OFFICE_SUFFIXES = {".doc", ".docx", ".xls", ".xlsx", ".xlsm"}
 SCRIPT_ALLOWLIST = {
     "scripts/build_release.py",
+    "scripts/run_tests.js",
     "scripts/run_tests.py",
 }
 

@@ -16,6 +16,7 @@
                 </div>
             </div>
             <form method="post" action="{{ url_for('admin.create_backup') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-dark">立即创建备份</button>
             </form>
         </div>
@@ -29,6 +30,7 @@
                 </div>
             </div>
             <form method="post" action="{{ url_for('admin.restore_backup') }}" enctype="multipart/form-data" onsubmit="return confirm('确定要恢复这个备份吗？当前数据库会被替换，系统会先保留一份恢复前副本。');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
                     <input class="form-control" type="file" name="backup_file" accept=".zip" required>
                 </div>

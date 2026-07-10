@@ -29,7 +29,7 @@
 - 教师工作台：提供紧凑课程队列、明确的下一步操作、统一课程流程导航、响应式主导航、键盘焦点状态和移动端报告表格滚动。
 - 课程管理：维护课程基本信息、课程目标、毕业要求指标点和考核项权重。
 - 教学大纲解析：从 `.docx` 教学大纲中提取课程信息、目标描述、毕业要求映射和考核支撑关系。
-- 成绩导入预检：支持 `.xls/.xlsx/.xlsm/.csv`，可一次选择多个班级文件；系统先预检学生数、班级、工作表、列映射和分值异常，确认后才写入数据库。
+- 成绩导入预检：支持 `.xls/.xlsx/.xlsm/.csv`，可一次选择多个班级文件；系统先预检学生数、班级、工作表、列映射、跨文件重复学号和分值异常，确认后将整批数据原子写入数据库。
 - 达成度分析：计算课程目标定量达成度、定性达成度、统计特征、达标人数、区间分布和课程总达成度。
 - 人工修订：可在计算分析页调整定性评价计数和说明，修订内容会同步进入报告。
 - 第五章编辑：可使用智能建议生成评价与改进措施，也可手工编辑后保存到报告。
@@ -37,6 +37,7 @@
 - 报告质量检查：在正式导出或归档前检查课程负责人、课程目标、成绩数据、第四章计算、第五章内容和报告归档状态。
 - 课程归档包：一键导出课程证据包，包含分析摘要、质量检查结果、教学大纲解析、导入日志、分析快照和已生成 Word 报告。
 - 数据备份与恢复：在“数据维护”页面创建系统备份包，备份数据库、上传文件和报告文件；恢复前会自动保存当前数据库副本。
+- 运行安全保护：按角色隔离课程访问，所有写操作启用 CSRF 防护，自动生成持久会话密钥，恢复前校验备份包，并将运行数据与源码目录隔离。
 
 ## 典型使用顺序
 
@@ -47,6 +48,8 @@
 5. 编辑第五章评价与持续改进内容。
 6. 查看报告预览，运行报告质量检查。
 7. 导出 Word 报告，并根据需要归档最终版或下载课程归档包。
+
+教学大纲、成绩批次、课程目标或期望值发生变化后，系统会将当前计算与可编辑分析标记为失效，必须重新计算后再导出新报告；历史分析快照与历史报告仍会保留作为证据。
 
 ## 技术栈
 
@@ -85,17 +88,18 @@ python init_db.py --reset-demo
 智能建议功能是可选的。未配置模型密钥时，建课、导入、计算、手工编辑和报告导出都可以正常使用。
 
 ```bash
-export SECRET_KEY="请替换为本机随机字符串"
-export COURSE_SYSTEM_DATA_DIR="/Users/你的用户名/course-system-data"
+export COURSE_SYSTEM_DATA_DIR="/path/to/course-system-data"
 export DEFAULT_ADMIN_USERNAME="admin"
 export DEFAULT_ADMIN_PASSWORD="请替换为临时强密码"
+export SESSION_COOKIE_SECURE="false"
 export LLM_API_BASE="https://api.deepseek.com"
 export LLM_API_KEY="你的模型服务密钥"
 export LLM_MODEL="deepseek-v4-flash"
 export LLM_TIMEOUT="45"
+export LLM_VERIFY_SSL="true"
 ```
 
-`LLM_TIMEOUT` 的单位是秒。
+`LLM_TIMEOUT` 的单位是秒。未配置 `SECRET_KEY` 时，系统会在运行数据目录中生成随机密钥并在后续启动中复用。通过 HTTPS 对外提供服务时，应设置 `SESSION_COOKIE_SECURE=true`。远程模型服务必须使用 HTTPS，正式环境不要关闭 TLS 证书校验。
 
 ## 数据与隐私
 
@@ -122,6 +126,13 @@ python scripts/build_release.py
 
 ```bash
 python scripts/run_tests.py
+```
+
+仓库维护者也可以使用与 CI 一致的跨平台入口：
+
+```bash
+npm ci
+npm test
 ```
 
 如果本机保留了课程测试文件，也可以运行：

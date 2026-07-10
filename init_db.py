@@ -3,16 +3,33 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy.engine import make_url
+
 from app import create_app
+from config import ProductionConfig
 from models import db
 from services.seed_service import seed_all
 
 
-def _sqlite_path(app):
-    uri = app.config["SQLALCHEMY_DATABASE_URI"]
-    if not uri.startswith("sqlite:///"):
+def _sqlite_path(database_uri):
+    url = make_url(database_uri)
+    if url.drivername != "sqlite" or not url.database or url.database == ":memory:":
         return None
-    return Path(uri.replace("sqlite:///", ""))
+    path = Path(url.database).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    return path
+
+
+def _backup_and_remove_database(database_path: Path) -> Path | None:
+    if not database_path.exists():
+        return None
+    backup_path = database_path.with_name(
+        f"{database_path.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}.bak{database_path.suffix}"
+    )
+    shutil.copy2(database_path, backup_path)
+    database_path.unlink()
+    return backup_path
 
 
 def main():
@@ -21,15 +38,15 @@ def main():
     parser.add_argument("--reset-demo", action="store_true", help="备份并重置本地 SQLite，写入内置样例数据")
     args = parser.parse_args()
 
+    if args.reset_demo:
+        db_path = _sqlite_path(ProductionConfig.SQLALCHEMY_DATABASE_URI)
+        if db_path:
+            backup_path = _backup_and_remove_database(db_path)
+            if backup_path:
+                print(f"已备份原数据库：{backup_path}")
+
     app = create_app()
     with app.app_context():
-        db_path = _sqlite_path(app)
-        if args.reset_demo and db_path and db_path.exists():
-            backup_path = db_path.with_name(f"{db_path.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}.bak{db_path.suffix}")
-            shutil.copy2(db_path, backup_path)
-            db_path.unlink()
-            print(f"已备份原数据库：{backup_path}")
-
         db.create_all()
         if args.reset_demo:
             seed_all(Path(app.root_path))

@@ -5,7 +5,7 @@
 ## Validation
 
 - [ ] `python -m compileall app.py config.py models.py routes services scripts tests`
-- [ ] `python scripts/run_tests.py`
+- [ ] `npm test`
 - [ ] `python scripts/build_release.py`
 
 ## Privacy Check

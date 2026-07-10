@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from pathlib import Path
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
@@ -27,6 +28,7 @@ from models import (
 )
 from services.course_progress_service import CourseProgressService
 from services.auth_service import AuthService
+from services.analysis_run_service import AnalysisRunService
 from services.import_service import ImportService
 from services.seed_service import create_generic_course_structure
 from services.template_adapters.outline_template_adapter import OutlineTemplateAdapter
@@ -36,7 +38,7 @@ course_bp = Blueprint("course", __name__, url_prefix="/courses")
 
 
 def get_course_or_404(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     return course
@@ -54,6 +56,15 @@ def _safe_float(value, default=1.5):
         return float(str(value).strip())
     except (TypeError, ValueError):
         return default
+
+
+def _resolve_pending_upload(pending):
+    filename = Path(str((pending or {}).get("filename") or "")).name
+    upload_dir = Path(current_app.config["UPLOAD_FOLDER"]).resolve()
+    file_path = (upload_dir / filename).resolve()
+    if not filename or file_path.parent != upload_dir or not file_path.is_file():
+        raise FileNotFoundError("待确认的上传文件不存在，请重新上传并预览。")
+    return file_path
 
 
 def _build_course_from_outline_payload(parsed):
@@ -261,7 +272,10 @@ def detail(course_id: int):
     course = get_course_or_404(course_id)
     form = CourseForm(obj=course)
     if form.validate_on_submit():
+        previous_expected_value = float(course.expected_value or 0)
         form.populate_obj(course)
+        if abs(float(course.expected_value or 0) - previous_expected_value) > 1e-9:
+            AnalysisRunService.invalidate_for_input_change(course.id)
         try:
             db.session.commit()
         except IntegrityError:
@@ -326,6 +340,7 @@ def manage_objectives(course_id: int):
             weight=form.weight.data,
         )
         db.session.add(objective)
+        AnalysisRunService.invalidate_for_input_change(course.id)
         db.session.commit()
         flash("课程目标已新增。", "success")
         return redirect(url_for("course.manage_objectives", course_id=course.id))
@@ -345,7 +360,13 @@ def show_outline(course_id: int):
         if pending_outline.get("course_id") != course.id:
             flash("没有找到可确认的教学大纲预览结果，请重新上传并预览。", "warning")
             return redirect(url_for("course.show_outline", course_id=course.id))
-        outline, _ = ImportService.import_outline(Path(pending_outline["file_path"]), course)
+        try:
+            file_path = _resolve_pending_upload(pending_outline)
+        except FileNotFoundError as exc:
+            session.pop("pending_outline_import", None)
+            flash(str(exc), "warning")
+            return redirect(url_for("course.show_outline", course_id=course.id))
+        outline, _ = ImportService.import_outline(file_path, course)
         session.pop("pending_outline_import", None)
         flash(f"教学大纲已确认导入并同步：{outline.filename}", "success")
         return redirect(url_for("course.show_outline", course_id=course.id))
@@ -357,16 +378,21 @@ def show_outline(course_id: int):
         parsed_outline["source_template"] = file_path.name
         session["pending_outline_import"] = {
             "course_id": course.id,
-            "file_path": str(file_path),
             "filename": file_path.name,
-            "parsed": parsed_outline,
         }
         pending_outline = session["pending_outline_import"]
         flash("教学大纲解析预览已生成，请确认后再写入课程配置。", "success")
 
     latest_outline = TeachingOutline.query.filter_by(course_id=course.id).order_by(TeachingOutline.created_at.desc()).first()
     if not parsed_outline and pending_outline and pending_outline.get("course_id") == course.id:
-        parsed_outline = pending_outline.get("parsed")
+        try:
+            pending_file = _resolve_pending_upload(pending_outline)
+            parsed_outline = OutlineTemplateAdapter.extract(pending_file)["payload"]
+            parsed_outline["source_template"] = pending_file.name
+        except (FileNotFoundError, ValueError, OSError):
+            session.pop("pending_outline_import", None)
+            pending_outline = None
+            flash("待确认的教学大纲预览已失效，请重新上传。", "warning")
     if not parsed_outline and latest_outline and latest_outline.parsed_json:
         parsed_outline = json.loads(latest_outline.parsed_json)
     return render_template(

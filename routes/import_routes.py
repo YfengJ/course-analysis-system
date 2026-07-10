@@ -4,7 +4,7 @@ from pathlib import Path
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, session, url_for
 
 from forms import ScoreUploadForm
-from models import Assessment, Course, ImportBatch
+from models import Assessment, Course, ImportBatch, db
 from services.import_service import ImportService
 from services.score_template_service import ScoreTemplateService
 from services.seed_service import DEFAULT_SEMESTER
@@ -15,7 +15,7 @@ import_bp = Blueprint("importer", __name__, url_prefix="/courses/<int:course_id>
 
 @import_bp.route("/score-template")
 def download_score_template(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
 
@@ -38,7 +38,7 @@ def download_score_template(course_id: int):
 
 @import_bp.route("/", methods=["GET", "POST"])
 def import_scores(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     form = ScoreUploadForm()
@@ -51,7 +51,15 @@ def import_scores(course_id: int):
         if pending_import.get("course_id") != course.id:
             flash("没有找到可确认的成绩预检结果，请重新上传并预检。", "warning")
             return redirect(url_for("importer.import_scores", course_id=course.id))
-        file_paths = [Path(item) for item in pending_import.get("file_paths", [])]
+        try:
+            file_paths = [
+                ImportService.resolve_saved_upload(item, current_app.config["UPLOAD_FOLDER"])
+                for item in pending_import.get("filenames", [])
+            ]
+        except FileNotFoundError as exc:
+            session.pop("pending_score_import", None)
+            flash(str(exc), "warning")
+            return redirect(url_for("importer.import_scores", course_id=course.id))
         semester = pending_import.get("semester") or DEFAULT_SEMESTER
         try:
             result = ImportService.import_score_files(file_paths, course, semester)
@@ -84,7 +92,7 @@ def import_scores(course_id: int):
             session["pending_score_import"] = {
                 "course_id": course.id,
                 "semester": form.semester.data.strip(),
-                "file_paths": [str(item) for item in file_paths],
+                "filenames": [item.name for item in file_paths],
             }
             pending_import = session["pending_score_import"]
             flash("成绩文件预检通过，请确认后再写入系统。", "success")

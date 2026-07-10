@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import shutil
 import tempfile
 import zipfile
@@ -12,6 +13,9 @@ from models import db
 
 class DataBackupService:
     DATABASE_MEMBER = "database/attainment_system.db"
+    MAX_ARCHIVE_MEMBERS = 5000
+    MAX_MEMBER_BYTES = 256 * 1024 * 1024
+    MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
 
     @staticmethod
     def _timestamp():
@@ -63,11 +67,15 @@ class DataBackupService:
             "version": "1.0",
         }
 
-        with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
-            package.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-            package.write(database_path, cls.DATABASE_MEMBER)
-            cls._write_folder(package, app.config.get("UPLOAD_FOLDER", ""), "uploads")
-            cls._write_folder(package, app.config.get("REPORT_FOLDER", ""), "reports")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_snapshot = Path(temp_dir) / "attainment_system.db"
+            with sqlite3.connect(database_path) as source, sqlite3.connect(database_snapshot) as target:
+                source.backup(target)
+            with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as package:
+                package.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+                package.write(database_snapshot, cls.DATABASE_MEMBER)
+                cls._write_folder(package, app.config.get("UPLOAD_FOLDER", ""), "uploads")
+                cls._write_folder(package, app.config.get("REPORT_FOLDER", ""), "reports")
 
         return output_path
 
@@ -97,6 +105,7 @@ class DataBackupService:
         restore_guard_path = database_path.with_name(f"{database_path.stem}_before_restore_{cls._timestamp()}{database_path.suffix}")
 
         with zipfile.ZipFile(backup_path) as package:
+            cls._validate_package(package)
             names = set(package.namelist())
             if cls.DATABASE_MEMBER not in names:
                 raise ValueError("备份包缺少数据库文件，无法恢复。")
@@ -106,15 +115,16 @@ class DataBackupService:
             if str(manifest.get("version") or "") != "1.0":
                 raise ValueError("备份包版本不兼容，请使用当前系统创建的备份包。")
 
-            db.session.remove()
-            db.engine.dispose()
-            if database_path.exists():
-                shutil.copy2(database_path, restore_guard_path)
-
             with tempfile.TemporaryDirectory() as temp_dir:
                 extracted_db = Path(temp_dir) / "attainment_system.db"
                 with package.open(cls.DATABASE_MEMBER) as source, extracted_db.open("wb") as target:
                     shutil.copyfileobj(source, target)
+                cls._validate_sqlite_database(extracted_db)
+
+                db.session.remove()
+                db.engine.dispose()
+                if database_path.exists():
+                    shutil.copy2(database_path, restore_guard_path)
                 shutil.copy2(extracted_db, database_path)
 
                 cls._restore_folder_members(package, "uploads/", app.config.get("UPLOAD_FOLDER", ""))
@@ -128,6 +138,39 @@ class DataBackupService:
             "pre_restore_copy": restore_guard_path if restore_guard_path.exists() else None,
             "manifest": manifest,
         }
+
+    @classmethod
+    def _validate_package(cls, package):
+        members = package.infolist()
+        if len(members) > cls.MAX_ARCHIVE_MEMBERS:
+            raise ValueError("备份包文件数量过多，已拒绝恢复。")
+        total_size = 0
+        names = set()
+        for member in members:
+            if member.filename in names:
+                raise ValueError("备份包包含重复文件名，已拒绝恢复。")
+            names.add(member.filename)
+            if member.file_size > cls.MAX_MEMBER_BYTES:
+                raise ValueError(f"备份包中的文件过大：{member.filename}")
+            total_size += member.file_size
+        if total_size > cls.MAX_UNCOMPRESSED_BYTES:
+            raise ValueError("备份包解压后体积过大，已拒绝恢复。")
+
+    @staticmethod
+    def _validate_sqlite_database(database_path):
+        try:
+            with sqlite3.connect(f"file:{Path(database_path)}?mode=ro", uri=True) as connection:
+                integrity = connection.execute("PRAGMA integrity_check").fetchone()
+                tables = {
+                    row[0]
+                    for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+                }
+        except sqlite3.DatabaseError as exc:
+            raise ValueError("备份包中的数据库文件无效，未执行恢复。") from exc
+        if not integrity or integrity[0] != "ok":
+            raise ValueError("备份包中的数据库完整性检查未通过，未执行恢复。")
+        if not {"courses", "users"}.issubset(tables):
+            raise ValueError("备份包中的数据库缺少系统核心表，未执行恢复。")
 
     @staticmethod
     def _restore_folder_members(package, prefix, target_folder):

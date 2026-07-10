@@ -1,9 +1,8 @@
-from datetime import datetime
 from pathlib import Path
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 
-from models import Course, ImportBatch, Report, Student, db
+from models import Course, ImportBatch, Report, Student, db, utc_now
 from services.course_archive_service import CourseArchiveService
 from services.report_quality_service import ReportQualityService
 from services.report_service import ReportService
@@ -44,7 +43,7 @@ def resolve_report_scope(course: Course):
 
 @report_bp.route("/preview")
 def preview(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     semester, class_scope = resolve_report_scope(course)
@@ -63,7 +62,7 @@ def preview(course_id: int):
 
 @report_bp.route("/quality")
 def quality_check(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     semester, class_scope = resolve_report_scope(course)
@@ -79,9 +78,9 @@ def quality_check(course_id: int):
     )
 
 
-@report_bp.route("/export-word")
+@report_bp.route("/export-word", methods=["POST"])
 def export_word(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     semester, class_scope = resolve_report_scope(course)
@@ -92,21 +91,26 @@ def export_word(course_id: int):
     if context["summary"]["student_count"] == 0:
         flash("当前统计范围下还没有成绩数据，暂时无法导出报告。", "warning")
         return redirect(url_for("importer.import_scores", course_id=course.id))
-    report, _ = ReportService.generate_word_report(
-        course,
-        semester,
-        class_scope,
-        current_app.config["REPORT_FOLDER"],
-        context=context,
-        template_path=current_app.config.get("REPORT_TEMPLATE_DOCX"),
-    )
+    try:
+        report, _ = ReportService.generate_word_report(
+            course,
+            semester,
+            class_scope,
+            current_app.config["REPORT_FOLDER"],
+            context=context,
+            template_path=current_app.config.get("REPORT_TEMPLATE_DOCX"),
+        )
+    except (OSError, ValueError) as exc:
+        current_app.logger.exception("Word 报告生成失败：course_id=%s", course.id)
+        flash(f"Word 报告生成失败：{exc}", "danger")
+        return redirect(url_for("report.preview", course_id=course.id, semester=semester, class_scope=class_scope))
     flash("Word 报告已生成。", "success")
     return redirect(url_for("report.download_report", course_id=course.id, report_id=report.id))
 
 
-@report_bp.route("/export-archive-package")
+@report_bp.route("/export-archive-package", methods=["POST"])
 def export_archive_package(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
     semester, class_scope = resolve_report_scope(course)
@@ -120,20 +124,26 @@ def export_archive_package(course_id: int):
 
 @report_bp.route("/download/<int:report_id>")
 def download_report(course_id: int, report_id: int):
-    report = Report.query.get_or_404(report_id)
+    report = db.get_or_404(Report, report_id)
     if report.course_id != course_id:
         abort(404)
-    if not report.word_path or not Path(report.word_path).exists():
+    report_root = Path(current_app.config["REPORT_FOLDER"]).resolve()
+    report_path = Path(report.word_path or "").resolve()
+    if (
+        not report.word_path
+        or (report_path != report_root and report_root not in report_path.parents)
+        or not report_path.is_file()
+    ):
         abort(404)
-    return send_file(report.word_path, as_attachment=True)
+    return send_file(report_path, as_attachment=True)
 
 
 @report_bp.route("/<int:report_id>/archive", methods=["POST"])
 def archive_report(course_id: int, report_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
-    report = Report.query.get_or_404(report_id)
+    report = db.get_or_404(Report, report_id)
     if report.course_id != course.id:
         abort(404)
 
@@ -143,7 +153,7 @@ def archive_report(course_id: int, report_id: int):
         return redirect(url_for("report.quality_check", course_id=course.id, semester=report.semester, class_scope=report.class_scope, strict="1"))
 
     report.is_archived = True
-    report.archived_at = datetime.utcnow()
+    report.archived_at = utc_now()
     report.archive_note = (request.form.get("archive_note") or "教师确认归档").strip()
     db.session.commit()
     flash(f"报告 v{report.report_version or 1} 已归档为最终版。", "success")

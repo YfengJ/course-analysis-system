@@ -68,6 +68,7 @@
         <h3>成绩已导入，尚未执行第四章计算</h3>
         <p>为了把“导入数据”和“生成分析结果”分开，这里需要你手动点击一次计算按钮。计算完成后，本页才会展示定量、定性、分布和第五章入口。</p>
         <form method="post" class="d-flex gap-2 justify-content-center flex-wrap mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="recalculate">
             <input type="hidden" name="semester" value="{{ summary.semester }}">
             <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">
@@ -276,6 +277,7 @@
     <div class="section-head">
         <div><h2>人工修订与版本快照</h2><p>用于保留教师确认后的等级分布和分析说明，保存后会生成一条新的分析快照。</p></div>
         <form method="post" class="d-flex gap-2 flex-wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="recalculate">
             <input type="hidden" name="semester" value="{{ summary.semester }}">
             <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">
@@ -283,6 +285,7 @@
         </form>
     </div>
     <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="save_revision">
         <input type="hidden" name="semester" value="{{ summary.semester }}">
         <input type="hidden" name="class_scope" value="{{ summary.class_scope }}">

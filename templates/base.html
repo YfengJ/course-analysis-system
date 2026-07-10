@@ -52,6 +52,7 @@
                             </div>
                             <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">修改密码</a>
                             <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="dropdown-item">退出登录</button>
                             </form>
                         </div>

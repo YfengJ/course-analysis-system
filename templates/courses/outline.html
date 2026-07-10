@@ -29,6 +29,7 @@
                 <strong>待确认的解析结果</strong>
                 <p class="mb-3">{{ pending_outline.filename }} 已完成预览。确认后，系统才会同步课程目标、毕业要求映射和考核权重。</p>
                 <form method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="confirm_pending">
                     <button type="submit" class="btn btn-dark w-100">确认导入教学大纲</button>
                 </form>

@@ -25,11 +25,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
       - name: Compile Python files
         run: python -m compileall app.py config.py models.py routes services scripts tests
 
+      - name: Check frontend JavaScript
+        run: node --check static/js/app.js
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
       - name: Run tests
-        run: python scripts/run_tests.py
+        run: npm test
 
       - name: Build sanitized release package
         run: python scripts/build_release.py

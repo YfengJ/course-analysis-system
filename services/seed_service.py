@@ -42,7 +42,7 @@ def get_default_course():
 
 
 def get_course_or_none(course_id: int):
-    return Course.query.get(course_id)
+    return db.session.get(Course, course_id)
 
 
 def create_generic_course_structure(course: Course):

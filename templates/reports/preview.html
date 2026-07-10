@@ -9,7 +9,7 @@
 {% set intro_actions = [
     {'href': url_for('analysis.index', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '返回分析页', 'class': 'btn-outline-dark'},
     {'href': url_for('report.quality_check', course_id=course.id, semester=semester, class_scope=class_scope, strict=1), 'label': '正式检查', 'class': 'btn-outline-dark'},
-    {'href': url_for('report.export_word', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '导出 Word', 'class': 'btn-dark'} if has_report_data else {'href': url_for('importer.import_scores', course_id=course.id), 'label': '先导入成绩', 'class': 'btn-dark'}
+    {'href': url_for('report.export_word', course_id=course.id, semester=semester, class_scope=class_scope), 'label': '导出 Word', 'class': 'btn-dark', 'method': 'post'} if has_report_data else {'href': url_for('importer.import_scores', course_id=course.id), 'label': '先导入成绩', 'class': 'btn-dark'}
 ] %}
 {% include "partials/page_intro.html" %}
 
@@ -24,7 +24,10 @@
     <div class="headline-actions">
         {% if has_report_data %}
         <a href="{{ url_for('insight.show', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">编辑第五章</a>
-        <a href="{{ url_for('report.export_archive_package', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">下载归档包</a>
+        <form method="post" action="{{ url_for('report.export_archive_package', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-dark">下载归档包</button>
+        </form>
         <button class="btn btn-outline-dark" onclick="window.print()">打印为 PDF</button>
         {% endif %}
     </div>
@@ -316,6 +319,7 @@
                         <span>{{ item.created_at.strftime('%Y-%m-%d') }} / v{{ item.report_version or 1 }} / {{ item.class_scope }} / {{ "%.2f"|format(item.quantitative_attainment) }}{% if item.is_archived %} / 已归档{% endif %}</span>
                         {% if not item.is_archived %}
                         <form method="post" action="{{ url_for('report.archive_report', course_id=course.id, report_id=item.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-outline-dark btn-sm">归档</button>
                         </form>
                         {% endif %}

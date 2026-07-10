@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import secrets
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +23,7 @@ from models import (
     TeachingOutline,
     db,
 )
+from services.analysis_run_service import AnalysisRunService
 from services.template_adapters.outline_template_adapter import OutlineTemplateAdapter
 from services.template_adapters.score_template_adapter import ScoreTemplateAdapter
 
@@ -46,10 +48,24 @@ class ImportService:
         """保存用户上传文件，统一落到系统上传目录。"""
         upload_dir = Path(upload_folder)
         upload_dir.mkdir(parents=True, exist_ok=True)
-        filename = secure_filename(file_storage.filename or "upload.dat")
+        original_name = Path(file_storage.filename or "upload.dat").name
+        suffix = Path(original_name).suffix.lower()
+        safe_stem = secure_filename(Path(original_name).stem) or "upload"
+        filename = f"{safe_stem}{suffix}"
         path = upload_dir / filename
+        if path.exists():
+            path = upload_dir / f"{path.stem}_{secrets.token_hex(4)}{path.suffix}"
         file_storage.save(path)
         return path
+
+    @staticmethod
+    def resolve_saved_upload(filename: str, upload_folder: str) -> Path:
+        safe_name = Path(str(filename or "")).name
+        upload_dir = Path(upload_folder).resolve()
+        file_path = (upload_dir / safe_name).resolve()
+        if not safe_name or file_path.parent != upload_dir or not file_path.is_file():
+            raise FileNotFoundError("待确认的上传文件不存在，请重新上传并预检。")
+        return file_path
 
     @staticmethod
     def _file_hash(file_path: Path):
@@ -459,6 +475,11 @@ class ImportService:
         record_count = 0
         if "学号" in dataframe.columns:
             record_count = int(dataframe["学号"].astype(str).str.strip().ne("").sum())
+        student_nos = (
+            [item for item in dataframe["学号"].astype(str).str.strip().tolist() if item]
+            if "学号" in dataframe.columns
+            else []
+        )
         return {
             "filename": file_path.name,
             "sheet": adapter_result.get("sheet_name") or "-",
@@ -466,6 +487,7 @@ class ImportService:
             "record_count": record_count,
             "classes": cls._student_classes_from_dataframe(dataframe),
             "assessment_columns": candidate_assessments,
+            "student_nos": student_nos,
             "issues": issues,
         }
 
@@ -518,6 +540,7 @@ class ImportService:
                 for item in block.get("items") or []
                 if item.get("assessment_name")
             ],
+            "student_nos": sorted(seen),
             "issues": issues,
         }
 
@@ -532,6 +555,7 @@ class ImportService:
         issues = []
         imported_estimate = 0
         all_classes = []
+        student_sources = {}
         for path in paths:
             try:
                 adapter_result = ScoreTemplateAdapter.load_score_payload(path, cls.normalize_columns)
@@ -556,6 +580,14 @@ class ImportService:
                 if class_name not in all_classes:
                     all_classes.append(class_name)
             issues.extend([f"{file_preview['filename']}：{item}" for item in file_preview["issues"]])
+            for student_no in file_preview.get("student_nos", []):
+                previous_source = student_sources.get(student_no)
+                if previous_source and previous_source != file_preview["filename"]:
+                    issues.append(
+                        f"跨文件学号重复：{student_no} 同时出现在 {previous_source} 和 {file_preview['filename']}"
+                    )
+                else:
+                    student_sources[student_no] = file_preview["filename"]
 
         return {
             "success": not issues,
@@ -702,7 +734,15 @@ class ImportService:
             course.class_names = ""
 
     @classmethod
-    def _import_flat_scores(cls, adapter_result, file_path: Path, course: Course, semester: str, reset_semester: bool = True):
+    def _import_flat_scores(
+        cls,
+        adapter_result,
+        file_path: Path,
+        course: Course,
+        semester: str,
+        reset_semester: bool = True,
+        commit: bool = True,
+    ):
         dataframe = adapter_result["dataframe"].copy()
         dataframe = dataframe.astype(object).where(pd.notna(dataframe), "")
         cls._sync_course_metadata_from_score_payload(course, adapter_result, semester)
@@ -736,7 +776,10 @@ class ImportService:
         )
         db.session.add(batch)
         if issues:
-            db.session.commit()
+            if commit:
+                db.session.commit()
+            else:
+                db.session.flush()
             return {"success": False, "issues": issues, "imported": 0, "batch": batch}
 
         assessment_map = {item.name: item for item in course.assessments}
@@ -785,11 +828,22 @@ class ImportService:
         batch.issues_json = json.dumps([], ensure_ascii=False)
         batch.post_student_count = cls._student_count(course, semester)
         batch.status = "已完成"
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return {"success": True, "issues": [], "imported": imported, "batch": batch}
 
     @classmethod
-    def _import_objective_split_scores(cls, adapter_result, file_path: Path, course: Course, semester: str, reset_semester: bool = True):
+    def _import_objective_split_scores(
+        cls,
+        adapter_result,
+        file_path: Path,
+        course: Course,
+        semester: str,
+        reset_semester: bool = True,
+        commit: bool = True,
+    ):
         issues = []
         cls._sync_course_metadata_from_score_payload(course, adapter_result, semester)
         cls._sync_assessment_support_from_split_payload(course, adapter_result)
@@ -875,17 +929,41 @@ class ImportService:
         batch.issues_json = json.dumps(issues, ensure_ascii=False)
         batch.post_student_count = cls._student_count(course, semester)
         batch.status = "已完成" if not issues else "存在问题"
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return {"success": len(issues) == 0, "issues": issues, "imported": imported, "batch": batch}
 
     @classmethod
-    def import_scores(cls, file_path: Path, course: Course, semester: str, reset_semester: bool = True):
+    def import_scores(
+        cls,
+        file_path: Path,
+        course: Course,
+        semester: str,
+        reset_semester: bool = True,
+        commit: bool = True,
+    ):
         """将标准成绩表导入数据库，并按学号执行更新或新增。"""
         file_path = Path(file_path)
         adapter_result = ScoreTemplateAdapter.load_score_payload(file_path, cls.normalize_columns)
         if adapter_result["mode"] == "objective_split":
-            return cls._import_objective_split_scores(adapter_result, file_path, course, semester, reset_semester=reset_semester)
-        return cls._import_flat_scores(adapter_result, file_path, course, semester, reset_semester=reset_semester)
+            return cls._import_objective_split_scores(
+                adapter_result,
+                file_path,
+                course,
+                semester,
+                reset_semester=reset_semester,
+                commit=commit,
+            )
+        return cls._import_flat_scores(
+            adapter_result,
+            file_path,
+            course,
+            semester,
+            reset_semester=reset_semester,
+            commit=commit,
+        )
 
     @classmethod
     def import_score_files(cls, file_paths, course: Course, semester: str):
@@ -904,34 +982,37 @@ class ImportService:
                 "preview": preview,
             }
 
-        pre_student_count = cls._student_count(course, semester)
-        cleanup_count = cls._clear_semester_scores(course, semester)
-        db.session.commit()
+        try:
+            pre_student_count = cls._student_count(course, semester)
+            cleanup_count = cls._clear_semester_scores(course, semester)
+            total_imported = 0
+            issues = []
+            batches = []
+            for path in paths:
+                result = cls.import_scores(path, course, semester, reset_semester=False, commit=False)
+                total_imported += result.get("imported", 0)
+                issues.extend([f"{path.name}：{item}" for item in result.get("issues", [])])
+                if result.get("batch"):
+                    batches.append(result["batch"])
+            if issues:
+                raise ValueError("；".join(issues[:8]))
 
-        total_imported = 0
-        issues = []
-        batches = []
-        for path in paths:
-            result = cls.import_scores(path, course, semester, reset_semester=False)
-            total_imported += result.get("imported", 0)
-            issues.extend([f"{path.name}：{item}" for item in result.get("issues", [])])
-            if result.get("batch"):
-                batches.append(result["batch"])
-
-        course.student_count = Student.query.filter_by(course_id=course.id, semester=semester).count()
-        cls._sync_course_class_names(course, semester)
-        post_student_count = cls._student_count(course, semester)
-        source_files_json = json.dumps([path.name for path in paths], ensure_ascii=False)
-        for batch in batches:
-            batch.source_files_json = source_files_json
-            batch.pre_student_count = pre_student_count
-            batch.post_student_count = post_student_count
-            batch.cleanup_count = cleanup_count
-            batch.notes = f"本次共上传 {len(paths)} 个成绩文件，合并导入 {total_imported} 名学生。"
-            if issues and batch.status == "已完成":
-                batch.status = "存在问题"
-        db.session.commit()
-        return {"success": not issues, "issues": issues, "imported": total_imported, "batches": batches}
+            course.student_count = Student.query.filter_by(course_id=course.id, semester=semester).count()
+            cls._sync_course_class_names(course, semester)
+            post_student_count = cls._student_count(course, semester)
+            source_files_json = json.dumps([path.name for path in paths], ensure_ascii=False)
+            for batch in batches:
+                batch.source_files_json = source_files_json
+                batch.pre_student_count = pre_student_count
+                batch.post_student_count = post_student_count
+                batch.cleanup_count = cleanup_count
+                batch.notes = f"本次共上传 {len(paths)} 个成绩文件，合并导入 {total_imported} 名学生。"
+            AnalysisRunService.invalidate_for_input_change(course.id, semester)
+            db.session.commit()
+            return {"success": True, "issues": [], "imported": total_imported, "batches": batches}
+        except Exception:
+            db.session.rollback()
+            raise
 
     @staticmethod
     def extract_docx_text(file_path: Path) -> str:
@@ -1065,5 +1146,6 @@ class ImportService:
             source_template=file_path.name,
         )
         db.session.add(outline)
+        AnalysisRunService.invalidate_for_input_change(course.id)
         db.session.commit()
         return outline, parsed

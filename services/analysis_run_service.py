@@ -1,6 +1,15 @@
 import json
 
-from models import AnalysisRun, AnalysisSnapshot, Report, db
+from models import (
+    AnalysisRevision,
+    AnalysisRun,
+    AnalysisSnapshot,
+    CourseInsight,
+    ImportBatch,
+    QualitativeRecord,
+    Report,
+    db,
+)
 
 
 class AnalysisRunService:
@@ -12,7 +21,6 @@ class AnalysisRunService:
             class_scope=class_scope,
         ).first()
 
-    @classmethod
     @staticmethod
     def _snapshot_payload(summary):
         if not summary:
@@ -92,10 +100,33 @@ class AnalysisRunService:
 
     @classmethod
     def is_ready(cls, course_id: int, semester: str, class_scope: str) -> bool:
-        if cls.get_record(course_id, semester, class_scope) is not None:
-            return True
-        return Report.query.filter_by(
+        latest_import = (
+            ImportBatch.query.filter_by(course_id=course_id, semester=semester)
+            .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+            .first()
+        )
+        record = cls.get_record(course_id, semester, class_scope)
+        if record is not None:
+            return not latest_import or record.updated_at >= latest_import.created_at
+        latest_report = Report.query.filter_by(
             course_id=course_id,
             semester=semester,
             class_scope=class_scope,
-        ).first() is not None
+        ).order_by(Report.created_at.desc(), Report.id.desc()).first()
+        return bool(latest_report and (not latest_import or latest_report.created_at >= latest_import.created_at))
+
+    @staticmethod
+    def invalidate_for_input_change(course_id: int, semester: str | None = None):
+        run_query = AnalysisRun.query.filter_by(course_id=course_id)
+        revision_query = AnalysisRevision.query.filter_by(course_id=course_id, is_active=True)
+        insight_query = CourseInsight.query.filter_by(course_id=course_id)
+        qualitative_query = QualitativeRecord.query.filter_by(course_id=course_id)
+        if semester:
+            run_query = run_query.filter_by(semester=semester)
+            revision_query = revision_query.filter_by(semester=semester)
+            insight_query = insight_query.filter_by(semester=semester)
+            qualitative_query = qualitative_query.filter_by(semester=semester)
+        run_query.delete(synchronize_session=False)
+        revision_query.update({AnalysisRevision.is_active: False}, synchronize_session=False)
+        insight_query.delete(synchronize_session=False)
+        qualitative_query.delete(synchronize_session=False)

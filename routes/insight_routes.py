@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from forms import AnalysisFilterForm
-from models import Course, Student
+from models import Course, Student, db
 from services.analysis_run_service import AnalysisRunService
 from services.attainment_service import AttainmentService
 from services.chart_service import ChartService
@@ -15,7 +15,7 @@ insight_bp = Blueprint("insight", __name__, url_prefix="/courses/<int:course_id>
 
 @insight_bp.route("/", methods=["GET", "POST"])
 def show(course_id: int):
-    course = Course.query.get(course_id)
+    course = db.session.get(Course, course_id)
     if not course:
         abort(404)
 

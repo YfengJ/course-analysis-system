@@ -2,12 +2,18 @@ from pathlib import Path
 
 from flask import Blueprint, abort, render_template, request
 
-from models import Report
+from models import Report, db
 from services.auth_service import AuthService
 from services.report_comparison_service import ReportComparisonService
 
 
 report_center_bp = Blueprint("report_center", __name__, url_prefix="/reports")
+
+
+def _can_access_report(report):
+    if report.course:
+        return AuthService.can_manage_course(report.course)
+    return AuthService.is_admin()
 
 
 @report_center_bp.route("/")
@@ -18,7 +24,7 @@ def index():
     reports = [
         report
         for report in Report.query.order_by(Report.created_at.desc()).all()
-        if not report.course or AuthService.can_manage_course(report.course)
+        if _can_access_report(report)
     ]
     report_rows = []
     summary = {
@@ -51,7 +57,7 @@ def index():
             continue
         previous_report = None
         if report.comparison_base_report_id:
-            previous_report = Report.query.get(report.comparison_base_report_id)
+            previous_report = db.session.get(Report, report.comparison_base_report_id)
         if previous_report is None and report.report_version and report.report_version > 1:
             previous_report = (
                 Report.query.filter_by(course_id=report.course_id, semester=report.semester, class_scope=report.class_scope)
@@ -83,14 +89,13 @@ def index():
 
 @report_center_bp.route("/compare")
 def compare():
-    old_report = Report.query.get(request.args.get("old_id", type=int))
-    new_report = Report.query.get(request.args.get("new_id", type=int))
+    old_id = request.args.get("old_id", type=int)
+    new_id = request.args.get("new_id", type=int)
+    old_report = db.session.get(Report, old_id) if old_id else None
+    new_report = db.session.get(Report, new_id) if new_id else None
     if not old_report or not new_report:
         abort(404)
-    if (
-        (old_report.course and not AuthService.can_manage_course(old_report.course))
-        or (new_report.course and not AuthService.can_manage_course(new_report.course))
-    ):
+    if not _can_access_report(old_report) or not _can_access_report(new_report):
         abort(403)
     comparison = ReportComparisonService.compare_reports(old_report, new_report)
     return render_template(

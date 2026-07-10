@@ -1,4 +1,4 @@
-from models import AnalysisRun, ImportBatch, Report, Student, TeachingOutline
+from models import AnalysisRun, CourseInsight, ImportBatch, Report, Student, TeachingOutline
 
 
 class CourseProgressService:
@@ -19,6 +19,10 @@ class CourseProgressService:
         return Report.query.filter_by(course_id=course_id).order_by(Report.created_at.desc()).first()
 
     @staticmethod
+    def get_latest_insight(course_id: int):
+        return CourseInsight.query.filter_by(course_id=course_id).order_by(CourseInsight.updated_at.desc()).first()
+
+    @staticmethod
     def get_student_count(course) -> int:
         return course.student_count or Student.query.filter_by(course_id=course.id).count()
 
@@ -28,12 +32,27 @@ class CourseProgressService:
         latest_import = cls.get_latest_import(course.id)
         latest_analysis = cls.get_latest_analysis(course.id)
         latest_report = cls.get_latest_report(course.id)
+        latest_insight = cls.get_latest_insight(course.id)
         student_count = cls.get_student_count(course)
 
         outline_ready = latest_outline is not None
         score_ready = student_count > 0
-        analysis_ready = latest_analysis is not None or latest_report is not None
-        report_ready = latest_report is not None
+        latest_analysis_evidence = latest_analysis or latest_report
+        analysis_ready = bool(
+            latest_analysis_evidence
+            and (
+                latest_import is None
+                or latest_analysis_evidence.updated_at >= latest_import.created_at
+            )
+        )
+        report_ready = bool(
+            latest_report
+            and analysis_ready
+            and (latest_import is None or latest_report.created_at >= latest_import.created_at)
+            and (latest_analysis is None or latest_report.created_at >= latest_analysis.updated_at)
+            and (latest_insight is None or latest_report.created_at >= latest_insight.updated_at)
+            and latest_report.created_at >= course.updated_at
+        )
 
         if not outline_ready:
             display_status = "待上传大纲"

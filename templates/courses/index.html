@@ -82,6 +82,7 @@
                 <a href="{{ url_for('report.preview', course_id=item.course.id) }}" class="btn btn-outline-dark">报告预览</a>
                 {% endif %}
                 <form method="post" action="{{ url_for('course.delete_course', course_id=item.course.id) }}" class="d-inline" onsubmit="return confirm('确定要删除这门课程吗？删除后会同时清除成绩、分析和报告记录。');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger">删除课程</button>
                 </form>
             </div>

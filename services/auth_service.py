@@ -60,7 +60,7 @@ class AuthService:
             return None
         user = getattr(g, "_current_user", None)
         if user is None:
-            user = User.query.get(user_id)
+            user = db.session.get(User, user_id)
             if user and not user.is_active:
                 session.clear()
                 return None

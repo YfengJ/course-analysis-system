@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template
+from sqlalchemy import or_
 
 from models import Course, Report, TeachingOutline
+from services.auth_service import AuthService
 from services.course_progress_service import CourseProgressService
 from services.seed_service import DEFAULT_COURSE_CODE
 
@@ -10,7 +12,13 @@ dashboard_bp = Blueprint("dashboard", __name__)
 
 @dashboard_bp.route("/")
 def index():
-    courses = Course.query.order_by(Course.created_at.desc()).all()
+    course_query = Course.query
+    current_user = AuthService.current_user()
+    if current_user and not AuthService.is_admin(current_user):
+        course_query = course_query.filter(
+            or_(Course.owner_user_id.is_(None), Course.owner_user_id == current_user.id)
+        )
+    courses = course_query.order_by(Course.created_at.desc()).all()
     course_cards = []
     for course in courses:
         snapshot = CourseProgressService.build_snapshot(course)
@@ -45,7 +53,10 @@ def index():
     if not featured_course and course_cards:
         featured_course = course_cards[0]
 
-    recent_reports = Report.query.order_by(Report.created_at.desc()).limit(8).all()
+    visible_course_ids = [course.id for course in courses]
+    report_query = Report.query.filter(Report.course_id.in_(visible_course_ids)) if visible_course_ids else None
+    recent_reports = report_query.order_by(Report.created_at.desc()).limit(8).all() if report_query is not None else []
+    visible_report_count = report_query.count() if report_query is not None else 0
     return render_template(
         "dashboard/index.html",
         title="课程工作台",
@@ -53,7 +64,7 @@ def index():
         featured_course=featured_course,
         recent_reports=recent_reports,
         course_count=len(course_cards),
-        report_count=Report.query.count(),
+        report_count=visible_report_count,
         analyzed_course_count=sum(1 for item in course_cards if item["analysis_ready"]),
         imported_course_count=sum(1 for item in course_cards if item["student_count"] > 0),
         template_ready_count=sum(1 for item in course_cards if item["template_ready"]),

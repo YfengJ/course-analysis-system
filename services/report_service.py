@@ -22,7 +22,7 @@ class ReportService:
         if not text:
             text = default
         if len(text) > max_chars:
-            digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:6]
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:6]
             text = f"{text[:max_chars]}_{digest}"
         return text
 
@@ -98,7 +98,14 @@ class ReportService:
             "improvement_actions": insight_payload["improvement_actions"] if insight_payload else [],
         }
         latest_outline = TeachingOutline.query.filter_by(course_id=course.id).order_by(TeachingOutline.created_at.desc()).first()
-        latest_import = ImportBatch.query.filter_by(course_id=course.id).order_by(ImportBatch.created_at.desc()).first()
+        import_query = ImportBatch.query.filter_by(course_id=course.id, semester=semester)
+        latest_import = import_query.order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc()).first()
+        source_imports = []
+        if latest_import:
+            if latest_import.source_files_json:
+                source_imports = import_query.filter_by(source_files_json=latest_import.source_files_json).all()
+            else:
+                source_imports = [latest_import]
         latest_snapshot = AnalysisRunService.latest_snapshot(course.id, semester, class_scope)
 
         return {
@@ -115,6 +122,7 @@ class ReportService:
             "chapter_five_source": chapter_five_source,
             "latest_outline": latest_outline,
             "latest_import": latest_import,
+            "source_import_ids": [item.id for item in source_imports],
             "template_meta": {
                 "course_template": course.template_name or "通用课程模板",
                 "course_template_version": course.template_version or "v2",
@@ -163,6 +171,7 @@ class ReportService:
             report_version=report_version,
             comparison_base_report_id=previous_report.id if previous_report else None,
             change_note=(context.get("analysis_revision") or {}).get("analysis_note", ""),
+            source_import_ids_json=json.dumps(context.get("source_import_ids") or [], ensure_ascii=False),
         )
         db.session.add(report)
         db.session.commit()

@@ -10,6 +10,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 from PIL import Image, ImageDraw, ImageFont
+from flask import current_app, has_app_context
 
 
 class ReportTemplateAdapter:
@@ -107,8 +108,7 @@ class ReportTemplateAdapter:
 
     @staticmethod
     def _start_body_section(document):
-        document.add_page_break()
-        section = document.add_section(WD_SECTION.CONTINUOUS)
+        section = document.add_section(WD_SECTION.NEW_PAGE)
         section.top_margin = Cm(2.54)
         section.bottom_margin = Cm(2.54)
         section.left_margin = Cm(2.8)
@@ -163,13 +163,15 @@ class ReportTemplateAdapter:
 
     @classmethod
     def _chart_output_dir(cls):
-        chart_dir = Path(__file__).resolve().parents[2] / "tmp" / "report_charts"
+        runtime_dir = Path(current_app.config["DATA_DIR"]) if has_app_context() else Path(__file__).resolve().parents[2]
+        chart_dir = runtime_dir / "tmp" / "report_charts"
         chart_dir.mkdir(parents=True, exist_ok=True)
         return chart_dir
 
     @classmethod
     def _asset_output_dir(cls):
-        asset_dir = Path(__file__).resolve().parents[2] / "tmp" / "report_assets"
+        runtime_dir = Path(current_app.config["DATA_DIR"]) if has_app_context() else Path(__file__).resolve().parents[2]
+        asset_dir = runtime_dir / "tmp" / "report_assets"
         asset_dir.mkdir(parents=True, exist_ok=True)
         return asset_dir
 
@@ -475,8 +477,9 @@ class ReportTemplateAdapter:
         source_parts = [class_scope, course.class_names or "", course.major or ""]
         try:
             source_parts.extend(student.class_name or "" for student in course.students)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            if has_app_context():
+                current_app.logger.debug("读取班级信息以推断年级时失败：%s", exc)
         source = " ".join(filter(None, source_parts))
         full_year = re.search(r"(?<!\d)(20\d{2})级", source)
         if full_year:

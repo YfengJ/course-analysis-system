@@ -12,6 +12,25 @@ class AnalysisRevisionService:
             return 0
 
     @classmethod
+    def validate_qualitative_overrides(cls, summary, qualitative_overrides):
+        expected_count = int((summary or {}).get("student_count") or 0)
+        errors = []
+        for objective in (summary or {}).get("objective_results") or []:
+            objective_id = str(objective.get("objective_id"))
+            override = (qualitative_overrides or {}).get(objective_id) or {}
+            counts = [
+                cls._as_int(override.get("excellent_count")),
+                cls._as_int(override.get("good_count")),
+                cls._as_int(override.get("medium_count")),
+                cls._as_int(override.get("poor_count")),
+            ]
+            actual_count = sum(counts)
+            if actual_count != expected_count:
+                title = objective.get("objective_title") or objective_id
+                errors.append(f"{title} 的优良中差人数合计为 {actual_count}，应与当前学生数 {expected_count} 一致。")
+        return errors
+
+    @classmethod
     def get_active_revision(cls, course_id: int, semester: str, class_scope: str):
         return (
             AnalysisRevision.query.filter_by(

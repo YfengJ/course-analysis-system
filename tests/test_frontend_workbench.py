@@ -48,6 +48,20 @@ class FrontendWorkbenchContractTest(unittest.TestCase):
         self.assertIn(".report-paper > .table", mobile_styles)
         self.assertIn("overflow-x: auto", mobile_styles)
 
+    def test_every_post_form_renders_a_csrf_token(self):
+        missing = []
+        for template_path in (ROOT / "templates").rglob("*.html"):
+            content = template_path.read_text(encoding="utf-8")
+            for form_html in re.findall(
+                r'<form\b[^>]*method=["\']post["\'][^>]*>.*?</form>',
+                content,
+                flags=re.IGNORECASE | re.DOTALL,
+            ):
+                if "csrf_token" not in form_html and "hidden_tag()" not in form_html:
+                    missing.append(str(template_path.relative_to(ROOT)))
+
+        self.assertEqual(missing, [])
+
 
 if __name__ == "__main__":
     unittest.main()

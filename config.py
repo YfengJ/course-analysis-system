@@ -22,7 +22,7 @@ def load_local_env() -> None:
             continue
         if value[:1] == value[-1:] and value[:1] in {"'", '"'}:
             value = value[1:-1]
-        os.environ[key] = value
+        os.environ.setdefault(key, value)
 
 
 load_local_env()
@@ -40,12 +40,15 @@ def default_data_dir() -> Path:
 
 class BaseConfig:
     DATA_DIR = str(default_data_dir())
-    SECRET_KEY = os.getenv("SECRET_KEY", "course-attainment-local-secret-key")
+    SECRET_KEY = os.getenv("SECRET_KEY", "")
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
         f"sqlite:///{Path(DATA_DIR) / 'instance' / 'attainment_system.db'}",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}
     UPLOAD_FOLDER = str(Path(DATA_DIR) / "uploads")
     EXPORT_FOLDER = str(Path(DATA_DIR) / "exports")
     REPORT_FOLDER = str(Path(DATA_DIR) / "exports" / "reports")
@@ -73,6 +76,7 @@ class DevelopmentConfig(BaseConfig):
 
 class TestingConfig(BaseConfig):
     TESTING = True
+    SECRET_KEY = "course-attainment-test-secret"  # nosec B105
     WTF_CSRF_ENABLED = False
     LOGIN_DISABLED = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"

@@ -1,7 +1,7 @@
 import json
 import re
 import ssl
-from urllib import error, parse, request
+from urllib import parse, request
 
 from flask import current_app
 
@@ -23,10 +23,22 @@ class LLMService:
     @staticmethod
     def _ssl_context():
         if not current_app.config.get("LLM_VERIFY_SSL", True):
-            return ssl._create_unverified_context()
+            current_app.logger.warning("LLM TLS 证书校验已关闭，不建议在正式环境使用。")
+            # This explicit operator setting is retained only for local troubleshooting.
+            return ssl._create_unverified_context()  # nosec B323
         if certifi:
             return ssl.create_default_context(cafile=certifi.where())
         return ssl.create_default_context()
+
+    @staticmethod
+    def _validated_api_base():
+        base = str(current_app.config.get("LLM_API_BASE") or "").strip().rstrip("/")
+        parsed_url = parse.urlparse(base)
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            raise ValueError("智能生成服务地址必须是有效的 HTTP(S) 地址。")
+        if parsed_url.scheme == "http" and parsed_url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            raise ValueError("非本机智能生成服务必须使用 HTTPS。")
+        return base
 
     @classmethod
     def build_course_insight(cls, prompt: str):
@@ -97,8 +109,8 @@ class LLMService:
                     "items": actions[:3],
                     "source": "llm",
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            current_app.logger.info("智能改进建议生成失败，已使用规则兜底：%s", exc)
 
         return {
             "items": fallback_actions,
@@ -113,7 +125,7 @@ class LLMService:
         max_tokens: int | None = None,
         json_mode: bool = False,
     ) -> str:
-        base = current_app.config["LLM_API_BASE"].rstrip("/")
+        base = cls._validated_api_base()
         url = f"{base}/chat/completions"
         payload = {
             "model": current_app.config["LLM_MODEL"],
@@ -134,7 +146,12 @@ class LLMService:
             },
             method="POST",
         )
-        with request.urlopen(req, timeout=current_app.config["LLM_TIMEOUT"], context=cls._ssl_context()) as response:
+        # _validated_api_base restricts the request to approved HTTP(S) schemes and hosts.
+        with request.urlopen(  # nosec B310
+            req,
+            timeout=current_app.config["LLM_TIMEOUT"],
+            context=cls._ssl_context(),
+        ) as response:
             body = json.loads(response.read().decode("utf-8"))
         return body["choices"][0]["message"]["content"]
 

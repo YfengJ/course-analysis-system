@@ -49,6 +49,7 @@
                 </ul>
                 {% if preview_result.success %}
                 <form method="post" class="mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="confirm_pending">
                     <button type="submit" class="btn btn-dark w-100">确认写入系统</button>
                 </form>
@@ -57,8 +58,9 @@
             {% elif pending_import %}
             <div class="tip-panel mt-4">
                 <strong>已有待确认的预检结果</strong>
-                <p class="mb-3">学期：{{ pending_import.semester }}，文件数：{{ pending_import.file_paths|length }}。如果确认无误，可以继续写入；若要换文件，请重新上传并预检。</p>
+                <p class="mb-3">学期：{{ pending_import.semester }}，文件数：{{ pending_import.filenames|length }}。如果确认无误，可以继续写入；若要换文件，请重新上传并预检。</p>
                 <form method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="confirm_pending">
                     <button type="submit" class="btn btn-dark w-100">确认写入系统</button>
                 </form>

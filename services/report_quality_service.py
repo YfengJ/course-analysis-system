@@ -1,6 +1,5 @@
 from models import Assessment, CourseObjective, ImportBatch, Report, Student
 from services.analysis_run_service import AnalysisRunService
-from services.course_insight_service import CourseInsightService
 from services.report_service import ReportService
 
 
@@ -50,6 +49,31 @@ class ReportQualityService:
         else:
             items.append(cls._item("pass", "课程目标", "课程目标描述已具备正式内容。", ""))
 
+        objective_weight_total = sum(float(item.weight or 0) for item in objectives)
+        if objectives and abs(objective_weight_total - 100.0) > 0.01:
+            items.append(
+                cls._item(
+                    cls._review_level(strict),
+                    "权重配置",
+                    f"课程目标权重合计为 {objective_weight_total:.2f}%，应为 100%。",
+                    "检查教学大纲中的分目标权重或在课程目标配置中修正。",
+                )
+            )
+        elif objectives:
+            items.append(cls._item("pass", "权重配置", "课程目标权重合计为 100%。", ""))
+
+        unbound_objectives = [item for item in objectives if not item.assessment_weights]
+        if unbound_objectives:
+            names = "、".join(item.title for item in unbound_objectives[:3])
+            items.append(
+                cls._item(
+                    cls._review_level(strict),
+                    "权重配置",
+                    f"课程目标未绑定考核项：{names}。",
+                    "检查第三章考核支撑关系，确保每个课程目标都有分值来源。",
+                )
+            )
+
         mapped_objectives = sum(1 for item in objectives if item.requirement_maps)
         if objectives and mapped_objectives < len(objectives):
             items.append(cls._item(cls._review_level(strict), "毕业要求映射", "部分课程目标缺少毕业要求指标点映射。", "在教学大纲或课程目标配置中补齐支撑关系。"))
@@ -63,6 +87,23 @@ class ReportQualityService:
             items.append(cls._item(cls._review_level(strict), "考核配置", "部分考核项尚未绑定课程目标权重。", "检查第三章考核支撑关系。"))
         else:
             items.append(cls._item("pass", "考核配置", "考核项与课程目标权重已配置。", ""))
+
+        mismatched_assessments = []
+        for assessment in assessments:
+            allocated = sum(float(item.weight_score or 0) for item in assessment.objective_weights)
+            if abs(allocated - float(assessment.total_score or 0)) > 0.01:
+                mismatched_assessments.append(
+                    f"{assessment.name}（分配 {allocated:.2f} / 满分 {float(assessment.total_score or 0):.2f}）"
+                )
+        if mismatched_assessments:
+            items.append(
+                cls._item(
+                    cls._review_level(strict),
+                    "权重配置",
+                    f"考核项目标分值分配与满分不一致：{'；'.join(mismatched_assessments[:3])}。",
+                    "检查教学大纲中的考核项分值和课程目标支撑分配。",
+                )
+            )
 
         student_count = summary.get("student_count") or Student.query.filter_by(course_id=course.id, semester=semester).count()
         if student_count <= 0:

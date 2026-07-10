@@ -1,10 +1,12 @@
 from pathlib import Path
+import secrets
 
 import click
 from flask import Flask, abort, redirect, request, url_for
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy.engine import make_url
 
-from config import DevelopmentConfig
+from config import ProductionConfig
 from models import Course, db
 from routes.admin_routes import admin_bp
 from routes.analysis_routes import analysis_bp
@@ -19,6 +21,9 @@ from routes.report_routes import report_bp
 from services.auth_service import AuthService
 from services.schema_migration_service import SchemaMigrationService
 from services.seed_service import seed_all
+
+
+csrf = CSRFProtect()
 
 
 def _explicit_config_keys(config_object) -> set[str]:
@@ -47,6 +52,25 @@ def configure_runtime_paths(app: Flask, config_object) -> None:
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{data_dir / 'instance' / 'attainment_system.db'}"
 
 
+def configure_runtime_security(app: Flask) -> None:
+    configured_secret = str(app.config.get("SECRET_KEY") or "").strip()
+    if configured_secret and configured_secret != "course-attainment-local-secret-key":  # nosec B105
+        return
+
+    secret_path = Path(app.config["DATA_DIR"]) / "instance" / ".secret_key"
+    secret_path.parent.mkdir(parents=True, exist_ok=True)
+    if secret_path.exists():
+        persisted_secret = secret_path.read_text(encoding="utf-8").strip()
+        if len(persisted_secret) >= 40:
+            app.config["SECRET_KEY"] = persisted_secret
+            return
+
+    generated_secret = secrets.token_urlsafe(48)
+    secret_path.write_text(generated_secret, encoding="utf-8")
+    secret_path.chmod(0o600)
+    app.config["SECRET_KEY"] = generated_secret
+
+
 def ensure_folders(app: Flask) -> None:
     for key in ("UPLOAD_FOLDER", "EXPORT_FOLDER", "REPORT_FOLDER", "BACKUP_FOLDER", "SAMPLE_DATA_FOLDER"):
         Path(app.config[key]).mkdir(parents=True, exist_ok=True)
@@ -58,14 +82,16 @@ def ensure_folders(app: Flask) -> None:
         database_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def create_app(config_object=DevelopmentConfig):
+def create_app(config_object=ProductionConfig):
     app = Flask(__name__)
     app.config.from_object(config_object)
     configure_runtime_paths(app, config_object)
+    configure_runtime_security(app)
 
     ensure_folders(app)
 
     db.init_app(app)
+    csrf.init_app(app)
     with app.app_context():
         db.create_all()
         SchemaMigrationService.ensure_schema()
@@ -98,7 +124,7 @@ def create_app(config_object=DevelopmentConfig):
             abort(403)
         course_id = (request.view_args or {}).get("course_id")
         if course_id is not None:
-            course = Course.query.get(course_id)
+            course = db.session.get(Course, course_id)
             if course and not AuthService.can_manage_course(course):
                 abort(403)
         return None
@@ -132,8 +158,5 @@ def create_app(config_object=DevelopmentConfig):
     return app
 
 
-app = create_app()
-
-
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000)
+    create_app().run(host="127.0.0.1", port=5000)

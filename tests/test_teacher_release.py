@@ -14,7 +14,9 @@ class ReleasePackageTest(unittest.TestCase):
 
         self.assertIn("app.py", files)
         self.assertIn("README.md", files)
+        self.assertIn("LICENSE", files)
         self.assertIn("scripts/run_tests.py", files)
+        self.assertIn("scripts/run_tests.js", files)
         self.assertIn("scripts/build_release.py", files)
         self.assertIn("docs/部署与使用说明.md", files)
         self.assertNotIn("scripts/build_teacher_release.py", files)

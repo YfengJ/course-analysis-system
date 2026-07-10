@@ -6,7 +6,10 @@ Use this checklist before publishing repository updates, sharing a release packa
 
 ```bash
 python -m compileall app.py config.py models.py routes services scripts tests
-python scripts/run_tests.py
+npm ci
+npm test
+npm audit --omit=dev --audit-level=moderate
+node --check static/js/app.js
 python scripts/build_release.py
 ```
 
@@ -14,6 +17,8 @@ Expected result:
 
 - Python files compile successfully.
 - Unit tests pass, with only documented private-file integration tests skipped when those files are not present.
+- Production npm dependencies have no moderate-or-higher known vulnerabilities.
+- Frontend JavaScript passes the syntax check.
 - `dist/course-system-release.zip` is regenerated.
 
 ## 2. Check Package Contents

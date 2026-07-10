@@ -16,7 +16,10 @@ Run checks before submitting changes:
 
 ```bash
 python -m compileall app.py config.py models.py routes services scripts tests
-python scripts/run_tests.py
+npm ci
+npm test
+npm audit --omit=dev --audit-level=moderate
+node --check static/js/app.js
 python scripts/build_release.py
 ```
 
@@ -45,6 +48,6 @@ Use the sanitized files in `sample_data/` for examples and tests.
 
 - The change is limited to one clear purpose.
 - Tests or documentation are updated when behavior changes.
-- `python scripts/run_tests.py` passes locally.
+- `npm test` passes locally.
 - `python scripts/build_release.py` still excludes private runtime data.
 - Screenshots are sanitized before being added to `docs/images/`.

@@ -27,7 +27,10 @@
     <div class="headline-actions">
         <a href="{{ url_for('report.preview', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-outline-dark">查看报告预览</a>
         {% if quality.ready %}
-        <a href="{{ url_for('report.export_archive_package', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="btn btn-dark">下载归档包</a>
+        <form method="post" action="{{ url_for('report.export_archive_package', course_id=course.id, semester=semester, class_scope=class_scope) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-dark">下载归档包</button>
+        </form>
         {% endif %}
     </div>
 </div>

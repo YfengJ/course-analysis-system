@@ -16,7 +16,7 @@ class CourseArchiveService:
             text = text.replace(char, "_")
         text = text.strip(" ._") or default
         if len(text.encode("utf-8")) > max_bytes:
-            digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:6]
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:6]
             while text and len(f"{text}_{digest}".encode("utf-8")) > max_bytes:
                 text = text[:-1]
             text = f"{text or default}_{digest}"
@@ -25,6 +25,7 @@ class CourseArchiveService:
     @classmethod
     def build_archive(cls, course, semester: str, class_scope: str, output_folder: str):
         output_dir = Path(output_folder) / "course_archives"
+        output_root = Path(output_folder).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
         filename = "_".join(
             [
@@ -129,8 +130,13 @@ class CourseArchiveService:
                 ),
             )
             for report in reports:
-                if report.word_path and Path(report.word_path).exists():
-                    package.write(report.word_path, f"reports/{Path(report.word_path).name}")
+                report_path = Path(report.word_path or "").resolve()
+                if (
+                    report.word_path
+                    and output_root in report_path.parents
+                    and report_path.is_file()
+                ):
+                    package.write(report_path, f"reports/{report_path.name}")
                 package.writestr(
                     f"reports/report_{report.id}_metadata.json",
                     json.dumps(

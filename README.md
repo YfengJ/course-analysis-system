@@ -29,7 +29,7 @@ The report workspace separates review actions from report content and keeps sour
 - Teacher-oriented workbench: compact course queue, explicit next actions, consistent workflow tabs, responsive navigation, keyboard focus states, and mobile-safe report tables.
 - Course management: maintain course metadata, objectives, graduation requirement indicators, and assessment weights.
 - Syllabus parsing: extract course information, objective descriptions, requirement mappings, and assessment support relationships from `.docx` syllabi.
-- Score import precheck: supports `.xls/.xlsx/.xlsm/.csv` and multiple class files in one import; the system previews student count, classes, sheets, column mappings, and score issues before writing to the database.
+- Score import precheck: supports `.xls/.xlsx/.xlsm/.csv` and multiple class files in one import; the system previews student count, classes, sheets, column mappings, duplicate student numbers, and score issues before writing the whole batch atomically.
 - Attainment analysis: calculates quantitative attainment, qualitative attainment, statistical indicators, passing counts, distribution bands, and overall course attainment.
 - Manual revision: adjust qualitative counts and explanatory notes on the analysis page, then reuse those revisions in the report.
 - Chapter 5 editing: generate improvement suggestions with an optional LLM integration, or edit and save the text manually.
@@ -37,6 +37,7 @@ The report workspace separates review actions from report content and keeps sour
 - Report quality check: checks course owner, objectives, score data, chapter 4 calculation, chapter 5 text, and archive status before export or final archive.
 - Course archive package: exports a course evidence package with analysis summary, quality check result, syllabus parsing result, import logs, analysis snapshots, and generated Word reports.
 - Backup and restore: create system backup packages from the Data Maintenance page and preserve the current database before restore.
+- Operational safeguards: role-based course access, CSRF protection for write operations, generated persistent session secrets, validated backup archives, and isolated runtime data directories.
 
 ## Typical Workflow
 
@@ -47,6 +48,8 @@ The report workspace separates review actions from report content and keeps sour
 5. Edit chapter 5 evaluation and improvement content.
 6. Preview the report and run the report quality check.
 7. Export the Word report, archive the final version, or download the course archive package.
+
+When a syllabus, score batch, objective, or expected value changes, the current calculation and editable analysis are invalidated. Recalculate before exporting the next report; historical snapshots and reports remain available as evidence.
 
 ## Tech Stack
 
@@ -85,17 +88,18 @@ Before resetting, the script backs up the old database as a `.bak` file.
 LLM-based suggestions are optional. Course creation, score import, attainment calculation, manual editing, and report export work without an LLM key.
 
 ```bash
-export SECRET_KEY="replace-with-a-random-local-secret"
-export COURSE_SYSTEM_DATA_DIR="/Users/your-name/course-system-data"
+export COURSE_SYSTEM_DATA_DIR="/path/to/course-system-data"
 export DEFAULT_ADMIN_USERNAME="admin"
 export DEFAULT_ADMIN_PASSWORD="replace-with-a-temporary-strong-password"
+export SESSION_COOKIE_SECURE="false"
 export LLM_API_BASE="https://api.deepseek.com"
 export LLM_API_KEY="your-model-service-key"
 export LLM_MODEL="deepseek-v4-flash"
 export LLM_TIMEOUT="45"
+export LLM_VERIFY_SSL="true"
 ```
 
-`LLM_TIMEOUT` is measured in seconds.
+`LLM_TIMEOUT` is measured in seconds. If `SECRET_KEY` is not configured, the application creates a random key under the runtime data directory and reuses it on later starts. Set `SESSION_COOKIE_SECURE=true` when the application is served through HTTPS. Remote LLM endpoints must use HTTPS; keep TLS verification enabled in production.
 
 ## Data And Privacy
 
@@ -122,6 +126,13 @@ The archive is written to `dist/course-system-release.zip` by default. It exclud
 
 ```bash
 python scripts/run_tests.py
+```
+
+Repository maintainers can run the same cross-platform entry point used by CI:
+
+```bash
+npm ci
+npm test
 ```
 
 If local course test files are available, you can also run:
