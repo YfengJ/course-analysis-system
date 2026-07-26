@@ -105,7 +105,10 @@ class ReportQualityService:
                 )
             )
 
-        student_count = summary.get("student_count") or Student.query.filter_by(course_id=course.id, semester=semester).count()
+        student_query = Student.query.filter_by(course_id=course.id, semester=semester)
+        if class_scope and class_scope != "全部班级":
+            student_query = student_query.filter_by(class_name=class_scope)
+        student_count = summary.get("student_count") or student_query.count()
         if student_count <= 0:
             items.append(cls._item("error", "成绩数据", "当前统计范围没有学生成绩。", "先完成成绩导入并确认写入系统。"))
         else:

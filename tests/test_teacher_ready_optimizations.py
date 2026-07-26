@@ -157,6 +157,60 @@ class TeacherReadyOptimizationTest(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(Student.query.filter_by(course_id=course.id).count(), 0)
 
+    def test_score_import_allows_blank_score_cells_for_absent_students(self):
+        course = self._create_course()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score_path = Path(temp_dir) / "成绩缺考.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "成绩明细"
+            sheet.append(["学号", "姓名", "班级", "课后作业", "大作业", "随堂测试", "期末考试", "上机实践"])
+            # 期末考试留空，模拟缺考学生：空白单元格应被跳过而非误报“不是有效数字”。
+            sheet.append(["2026001", "张三", "测试班", 4, 4, 8, None, 8])
+            sheet.append(["2026002", "李四", "测试班", 5, 4, 8, 70, 8])
+            workbook.save(score_path)
+
+            preview = ImportService.preview_score_files([score_path], course, DEFAULT_SEMESTER)
+            self.assertTrue(preview["success"], preview.get("issues"))
+
+            result = ImportService.import_score_files([score_path], course, DEFAULT_SEMESTER)
+
+        self.assertTrue(result["success"], result.get("issues"))
+        self.assertEqual(Student.query.filter_by(course_id=course.id).count(), 2)
+
+    def test_multi_file_score_upload_rejects_disguised_extension(self):
+        course = self._create_course()
+        valid_stream = BytesIO()
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "成绩明细"
+        sheet.append(["学号", "姓名", "班级", "课后作业", "大作业", "随堂测试", "期末考试", "上机实践"])
+        sheet.append(["2026001", "张三", "测试班", 4, 4, 8, 60, 8])
+        workbook.save(valid_stream)
+        valid_stream.seek(0)
+
+        upload_dir = Path(self.app.config["UPLOAD_FOLDER"])
+        # 第一个文件是合法 xlsx（让表单级 FileAllowed 校验通过），第二个是伪装成 .html 的文件，
+        # 多选上传时它必须被逐个校验拦截，且任何文件都不应落盘。
+        response = self.client.post(
+            f"/courses/{course.id}/imports/",
+            data={
+                "semester": DEFAULT_SEMESTER,
+                "file": [
+                    (valid_stream, "成绩.xlsx"),
+                    (BytesIO(b"<html>payload</html>"), "payload.html"),
+                ],
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("格式不受支持", response.get_data(as_text=True))
+        saved_html = list(upload_dir.glob("payload*.html")) if upload_dir.exists() else []
+        self.assertEqual(saved_html, [], "伪装扩展名的文件不应写入上传目录")
+        self.assertEqual(Student.query.filter_by(course_id=course.id).count(), 0)
+
     def test_outline_preview_does_not_overwrite_course_until_confirmed(self):
         course = self._create_course(name="原课程名称")
         parsed_payload = {

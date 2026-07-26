@@ -15,6 +15,7 @@
             <h2 class="mb-3">课程基础信息</h2>
             <form method="post">
                 {{ form.hidden_tag() }}
+                {% include "partials/form_errors.html" %}
                 <div class="row g-3">
                     <div class="col-md-6">{{ form.code.label(class="form-label") }}{{ form.code(class="form-control form-control-lg") }}</div>
                     <div class="col-md-6">{{ form.name.label(class="form-label") }}{{ form.name(class="form-control form-control-lg") }}</div>
@@ -40,6 +41,7 @@
             <p class="tip-text">推荐老师使用这一种：系统会从 docx 教学大纲中读取课程编号、课程名称、学时学分、课程目标、毕业要求和考核权重。</p>
             <form method="post" enctype="multipart/form-data" action="{{ url_for('course.create_course_from_outline') }}">
                 {{ outline_form.hidden_tag() }}
+                {% with form=outline_form %}{% include "partials/form_errors.html" %}{% endwith %}
                 <div class="mb-3">{{ outline_form.file.label(class="form-label") }}{{ outline_form.file(class="form-control") }}</div>
                 {{ outline_form.submit(class="btn btn-dark w-100", value="上传大纲并创建课程") }}
             </form>

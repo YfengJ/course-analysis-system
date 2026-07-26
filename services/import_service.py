@@ -18,6 +18,7 @@ from models import (
     ObjectiveAssessmentWeight,
     ObjectiveRequirementMap,
     ObjectiveScore,
+    QualitativeRecord,
     Score,
     Student,
     TeachingOutline,
@@ -420,7 +421,9 @@ class ImportService:
                 if assessment_name not in dataframe.columns:
                     continue
                 value = row.get(assessment_name)
-                if pd.isna(value):
+                # 预检/导入前会将缺考等空白单元格统一转为空字符串（见 .where(pd.notna...)），
+                # 这些空白需与导入循环一致地跳过，否则 float("") 会误报“不是有效数字”。
+                if value is None or value == "" or pd.isna(value):
                     continue
                 try:
                     numeric_value = float(value)
@@ -1114,8 +1117,12 @@ class ImportService:
         parsed_objectives = parsed.get("objectives") or []
         if parsed_objectives:
             existing_objectives = CourseObjective.query.filter_by(course_id=course.id).order_by(CourseObjective.sequence.asc()).all()
+            for obsolete in existing_objectives[len(parsed_objectives):]:
+                QualitativeRecord.query.filter_by(objective_id=obsolete.id).delete(synchronize_session=False)
+                db.session.delete(obsolete)
             for index, item in enumerate(parsed_objectives):
                 if index < len(existing_objectives):
+                    existing_objectives[index].sequence = index + 1
                     existing_objectives[index].title = item["title"]
                     existing_objectives[index].description = item["description"]
                 else:

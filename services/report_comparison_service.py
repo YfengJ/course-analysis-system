@@ -29,6 +29,11 @@ class ReportComparisonService:
             for item in old_snapshot.get("objective_results", [])
             if item.get("objective_title")
         }
+        new_objectives = {
+            item.get("objective_title"): item
+            for item in new_snapshot.get("objective_results", [])
+            if item.get("objective_title")
+        }
         objective_deltas = []
         for new_item in new_snapshot.get("objective_results", []):
             title = new_item.get("objective_title")
@@ -44,6 +49,22 @@ class ReportComparisonService:
                     "old_qualitative": cls._number(old_item.get("qualitative_attainment")),
                     "new_qualitative": cls._number(new_item.get("qualitative_attainment")),
                     "qualitative_delta": cls._delta(old_item.get("qualitative_attainment"), new_item.get("qualitative_attainment")),
+                    "change_type": "changed" if old_item else "added",
+                }
+            )
+        for title, old_item in old_objectives.items():
+            if title in new_objectives:
+                continue
+            objective_deltas.append(
+                {
+                    "objective_title": title,
+                    "old_quantitative": cls._number(old_item.get("quantitative_attainment")),
+                    "new_quantitative": 0.0,
+                    "quantitative_delta": cls._delta(old_item.get("quantitative_attainment"), 0),
+                    "old_qualitative": cls._number(old_item.get("qualitative_attainment")),
+                    "new_qualitative": 0.0,
+                    "qualitative_delta": cls._delta(old_item.get("qualitative_attainment"), 0),
+                    "change_type": "removed",
                 }
             )
         return {

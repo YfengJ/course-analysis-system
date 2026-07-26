@@ -93,6 +93,14 @@ class TeacherHardeningTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_teacher_navigation_does_not_show_admin_maintenance_link(self):
+        self._login_as(self.teacher_a)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"/admin/backups", response.data)
+
     def test_initial_password_must_be_changed_before_using_system(self):
         login_response = self.client.post(
             "/login",

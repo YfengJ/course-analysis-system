@@ -9,7 +9,7 @@ function resolveRatioAxisMax(values, fallback = 1) {
 
 function renderObjectiveBar(elementId, payload) {
     const el = document.getElementById(elementId);
-    if (!el) return;
+    if (!el || !payload || !payload.labels) return;
     const chart = echarts.init(el);
     const axisMax = resolveRatioAxisMax([
         ...(payload.quantitative || []),
@@ -31,27 +31,9 @@ function renderObjectiveBar(elementId, payload) {
     bindChartResize(chart);
 }
 
-function renderGaugeChart(elementId, payload) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-    const chart = echarts.init(el);
-    const axisMax = resolveRatioAxisMax([payload.value]);
-    chart.setOption({
-        series: [{
-            type: "gauge",
-            max: axisMax,
-            progress: { show: true, width: 18 },
-            axisLine: { lineStyle: { width: 18 } },
-            detail: { valueAnimation: true, formatter: "{value}" },
-            data: [{ value: Number(payload.value.toFixed(2)), name: payload.status }]
-        }]
-    });
-    bindChartResize(chart);
-}
-
 function renderAssessmentBar(elementId, payload) {
     const el = document.getElementById(elementId);
-    if (!el) return;
+    if (!el || !payload || !payload.labels) return;
     const chart = echarts.init(el);
     const axisMax = resolveRatioAxisMax(payload.values || []);
     chart.setOption({
@@ -70,7 +52,7 @@ function renderAssessmentBar(elementId, payload) {
 
 function renderDistributionBar(elementId, payload) {
     const el = document.getElementById(elementId);
-    if (!el) return;
+    if (!el || !payload || !payload.labels || !payload.series) return;
     const chart = echarts.init(el);
     chart.setOption({
         tooltip: { trigger: "axis" },

@@ -132,7 +132,13 @@ def create_course_from_outline():
         return redirect(url_for("course.create_course"))
 
     file_path = ImportService.save_upload(form.file.data, current_app.config["UPLOAD_FOLDER"])
-    parsed = OutlineTemplateAdapter.extract(file_path)["payload"]
+    try:
+        parsed = OutlineTemplateAdapter.extract(file_path)["payload"]
+    except Exception as exc:
+        current_app.logger.info("教学大纲解析失败：%s (%s)", file_path.name, type(exc).__name__)
+        file_path.unlink(missing_ok=True)
+        flash("教学大纲文件无法解析，请确认文件未损坏且为有效的 docx 文档。", "danger")
+        return redirect(url_for("course.create_course"))
 
     course = _build_course_from_outline_payload(parsed)
     current_user = AuthService.current_user()
@@ -308,7 +314,7 @@ def detail(course_id: int):
         },
         {
             "label": "报告预览/导出",
-            "done": latest_report is not None,
+            "done": snapshot["report_ready"],
             "hint": latest_report.status if latest_report else ("分析完成后即可进入预览" if snapshot["analysis_ready"] else "等待生成"),
         },
     ]
@@ -373,7 +379,13 @@ def show_outline(course_id: int):
 
     if form.validate_on_submit():
         file_path = ImportService.save_upload(form.file.data, current_app.config["UPLOAD_FOLDER"])
-        adapter_result = OutlineTemplateAdapter.extract(file_path)
+        try:
+            adapter_result = OutlineTemplateAdapter.extract(file_path)
+        except Exception as exc:
+            current_app.logger.info("教学大纲解析失败：%s (%s)", file_path.name, type(exc).__name__)
+            file_path.unlink(missing_ok=True)
+            flash("教学大纲文件无法解析，请确认文件未损坏且为有效的 docx 文档。", "danger")
+            return redirect(url_for("course.show_outline", course_id=course.id))
         parsed_outline = adapter_result["payload"]
         parsed_outline["source_template"] = file_path.name
         session["pending_outline_import"] = {

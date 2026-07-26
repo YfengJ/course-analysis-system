@@ -3,6 +3,7 @@ import json
 from flask import current_app
 
 from models import CourseInsight, ImportBatch, TeachingOutline, db
+from services.analysis_revision_service import AnalysisRevisionService
 from services.attainment_service import AttainmentService
 from services.llm_service import LLMService
 
@@ -31,11 +32,21 @@ class CourseInsightService:
             raise RuntimeError("尚未配置智能生成服务密钥，暂时无法自动生成课程评价结果。你仍可手工编辑第五章。")
 
         summary = AttainmentService.calculate(course, semester, class_scope)
+        summary, _ = AnalysisRevisionService.apply_active_revision(
+            summary,
+            course.id,
+            semester,
+            class_scope,
+        )
         if summary["student_count"] <= 0:
             raise RuntimeError("当前统计范围下暂无成绩数据，请先导入成绩后再生成。")
 
         outline = TeachingOutline.query.filter_by(course_id=course.id).order_by(TeachingOutline.created_at.desc()).first()
-        latest_import = ImportBatch.query.filter_by(course_id=course.id).order_by(ImportBatch.created_at.desc()).first()
+        latest_import = (
+            ImportBatch.query.filter_by(course_id=course.id, semester=semester)
+            .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+            .first()
+        )
         prompt = cls._build_prompt(course, summary, outline, latest_import, semester, class_scope)
         provider = cls._provider_label()
         try:
@@ -430,6 +441,17 @@ class CourseInsightService:
             objective_result["assessment_details"],
             key=lambda item: item["score_rate"],
         ) if objective_result["assessment_details"] else None
+        if objective_result.get("status") != "达成":
+            if weakest_assessment:
+                return (
+                    f"{objective_result['objective_title']}尚未达到课程期望值，"
+                    f"当前相对薄弱的考核环节为{weakest_assessment['assessment_name']}，"
+                    "后续需要围绕对应知识与能力开展针对性讲解、练习和反馈。"
+                )
+            return (
+                f"{objective_result['objective_title']}尚未达到课程期望值，"
+                "后续应结合该目标的学生分布与课程内容补充针对性教学和学习支持。"
+            )
         if weakest_assessment:
             return (
                 f"{objective_result['objective_title']}整体已达到课程期望值，但学生表现仍主要集中在中高分区间，"

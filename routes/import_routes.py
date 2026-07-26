@@ -80,6 +80,14 @@ def import_scores(course_id: int):
         if not uploaded_files:
             flash("请至少选择一个成绩文件。", "danger")
             return redirect(url_for("importer.import_scores", course_id=course.id))
+        # FileAllowed 只校验表单绑定的第一个文件，多选上传时其余文件会绕过扩展名白名单，
+        # 因此这里对每个文件单独校验后再落盘。
+        allowed_score_extensions = {"xls", "xlsx", "xlsm", "csv"}
+        for item in uploaded_files:
+            extension = Path(item.filename).suffix.lower().lstrip(".")
+            if extension not in allowed_score_extensions:
+                flash(f"文件“{item.filename}”格式不受支持，仅支持 Excel 或 CSV 文件。", "danger")
+                return redirect(url_for("importer.import_scores", course_id=course.id))
         file_paths = [ImportService.save_upload(item, current_app.config["UPLOAD_FOLDER"]) for item in uploaded_files]
         try:
             preview_result = ImportService.preview_score_files(file_paths, course, form.semester.data.strip())

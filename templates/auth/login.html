@@ -20,6 +20,7 @@
         </div>
         <form method="post">
             {{ form.hidden_tag() }}
+            {% include "partials/form_errors.html" %}
             <input type="hidden" name="next" value="{{ next_url }}">
             <div class="mb-3">{{ form.username.label(class="form-label") }}{{ form.username(class="form-control form-control-lg", autocomplete="username", autofocus=True) }}</div>
             <div class="mb-4">{{ form.password.label(class="form-label") }}{{ form.password(class="form-control form-control-lg", autocomplete="current-password") }}</div>

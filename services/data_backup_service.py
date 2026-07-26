@@ -5,6 +5,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy.engine import make_url
 
@@ -102,7 +103,10 @@ class DataBackupService:
 
         database_path = cls._sqlite_database_path(app)
         database_path.parent.mkdir(parents=True, exist_ok=True)
-        restore_guard_path = database_path.with_name(f"{database_path.stem}_before_restore_{cls._timestamp()}{database_path.suffix}")
+        restore_token = f"{cls._timestamp()}_{uuid4().hex[:8]}"
+        restore_guard_path = database_path.with_name(
+            f"{database_path.stem}_before_restore_{restore_token}{database_path.suffix}"
+        )
 
         with zipfile.ZipFile(backup_path) as package:
             cls._validate_package(package)
@@ -116,19 +120,70 @@ class DataBackupService:
                 raise ValueError("备份包版本不兼容，请使用当前系统创建的备份包。")
 
             with tempfile.TemporaryDirectory() as temp_dir:
-                extracted_db = Path(temp_dir) / "attainment_system.db"
+                staging_root = Path(temp_dir)
+                extracted_db = staging_root / "attainment_system.db"
                 with package.open(cls.DATABASE_MEMBER) as source, extracted_db.open("wb") as target:
                     shutil.copyfileobj(source, target)
                 cls._validate_sqlite_database(extracted_db)
 
+                database_candidate = database_path.with_name(
+                    f".{database_path.name}_restore_{restore_token}"
+                )
+                staged_folders = []
+                try:
+                    for prefix, configured_target in (
+                        ("uploads/", app.config.get("UPLOAD_FOLDER", "")),
+                        ("reports/", app.config.get("REPORT_FOLDER", "")),
+                    ):
+                        if not configured_target:
+                            continue
+                        staged_path = staging_root / prefix.rstrip("/")
+                        cls._restore_folder_members(package, prefix, staged_path)
+                        target_path = Path(configured_target).resolve()
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        candidate_path = target_path.parent / f".{target_path.name}_restore_{restore_token}"
+                        guard_path = target_path.parent / f".{target_path.name}_before_restore_{restore_token}"
+                        staged_folders.append((target_path, candidate_path, guard_path))
+                        shutil.copytree(staged_path, candidate_path)
+
+                    shutil.copy2(extracted_db, database_candidate)
+                except Exception:
+                    for _, candidate_path, _ in staged_folders:
+                        cls._remove_path(candidate_path)
+                    database_candidate.unlink(missing_ok=True)
+                    raise
+
+                database_existed = database_path.exists()
+
                 db.session.remove()
                 db.engine.dispose()
-                if database_path.exists():
-                    shutil.copy2(database_path, restore_guard_path)
-                shutil.copy2(extracted_db, database_path)
-
-                cls._restore_folder_members(package, "uploads/", app.config.get("UPLOAD_FOLDER", ""))
-                cls._restore_folder_members(package, "reports/", app.config.get("REPORT_FOLDER", ""))
+                try:
+                    if database_existed:
+                        shutil.copy2(database_path, restore_guard_path)
+                    database_candidate.replace(database_path)
+                    for target_path, candidate_path, guard_path in staged_folders:
+                        if target_path.exists():
+                            target_path.rename(guard_path)
+                        candidate_path.rename(target_path)
+                except Exception:
+                    if database_existed and restore_guard_path.exists():
+                        shutil.copy2(restore_guard_path, database_path)
+                    elif not database_existed:
+                        database_path.unlink(missing_ok=True)
+                    for target_path, candidate_path, guard_path in reversed(staged_folders):
+                        cls._remove_path(target_path)
+                        if guard_path.exists():
+                            guard_path.rename(target_path)
+                        cls._remove_path(candidate_path)
+                    db.engine.dispose()
+                    db.session.remove()
+                    raise
+                else:
+                    for _, candidate_path, guard_path in staged_folders:
+                        cls._remove_path(candidate_path)
+                        cls._remove_path(guard_path)
+                finally:
+                    database_candidate.unlink(missing_ok=True)
 
         db.engine.dispose()
         db.session.remove()
@@ -184,7 +239,15 @@ class DataBackupService:
             relative = Path(name).relative_to(prefix.rstrip("/"))
             output_path = (target_path / relative).resolve()
             if target_path != output_path.parent and target_path not in output_path.parents:
-                continue
+                raise ValueError(f"备份包包含非法文件路径：{name}")
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with package.open(name) as source, output_path.open("wb") as target:
                 shutil.copyfileobj(source, target)
+
+    @staticmethod
+    def _remove_path(path):
+        path = Path(path)
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)

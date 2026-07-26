@@ -318,8 +318,10 @@
                     <div class="d-flex justify-content-between gap-2 align-items-center">
                         <span>{{ item.created_at.strftime('%Y-%m-%d') }} / v{{ item.report_version or 1 }} / {{ item.class_scope }} / {{ "%.2f"|format(item.quantitative_attainment) }}{% if item.is_archived %} / 已归档{% endif %}</span>
                         {% if not item.is_archived %}
-                        <form method="post" action="{{ url_for('report.archive_report', course_id=course.id, report_id=item.id) }}">
+                        <form method="post" action="{{ url_for('report.archive_report', course_id=course.id, report_id=item.id) }}" onsubmit="return confirm('归档后该版本将作为最终版保留。确定继续吗？');">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <label class="visually-hidden" for="archive-note-{{ item.id }}">归档说明</label>
+                            <input class="form-control form-control-sm mb-2" id="archive-note-{{ item.id }}" type="text" name="archive_note" maxlength="255" placeholder="归档说明（可选）">
                             <button type="submit" class="btn btn-outline-dark btn-sm">归档</button>
                         </form>
                         {% endif %}

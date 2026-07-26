@@ -4,6 +4,16 @@ All notable public-facing changes are tracked here.
 
 ## Unreleased
 
+- Fixed score import wrongly rejecting blank/absent score cells as "not a valid number", so sheets with missing scores now preview and import correctly.
+- Validated every file in multi-file score uploads against the extension allowlist, closing a bypass where only the first file was checked.
+- Added accessible labels to qualitative count inputs, removed dead gauge-chart code, and hardened chart rendering against missing data.
+- Restricted version control to the public release file set, keeping private thesis-authoring scripts and working notes out of the repository.
+- Updated Pillow to 12.3.0 to incorporate current image-processing security fixes.
+- Made analysis saves atomic, linked snapshots to their source imports, and prevented invalidated or cross-scope reports from appearing current.
+- Corrected qualitative aggregation, rejected nonnumeric split scores, removed obsolete objectives on outline reimport, and aligned insight generation with active revisions.
+- Made backup restoration validate and stage every artifact before replacement, restore managed folders exactly, roll back failures, and clean temporary candidates.
+- Derived report class labels from the selected semester, included removed objectives in version comparisons, and tightened class-scoped report quality checks.
+- Replaced release packaging deny rules with an explicit public-file allowlist and added visible form errors, role-aware navigation, labels, and archive confirmation.
 - Hardened write operations with global CSRF protection and corrected teacher-level course and report visibility boundaries.
 - Made multi-file score imports atomic, detected duplicate student numbers across files, and prevented same-name uploads from overwriting each other.
 - Invalidated current analysis, revisions, and insights when source inputs change while preserving historical reports and snapshots.

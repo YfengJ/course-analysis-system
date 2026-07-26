@@ -1,7 +1,7 @@
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 
 from forms import AnalysisFilterForm
-from models import Course, Student, db
+from models import Course, ImportBatch, Student, db
 from services.analysis_revision_service import AnalysisRevisionService
 from services.analysis_run_service import AnalysisRunService
 from services.attainment_service import AttainmentService
@@ -40,57 +40,79 @@ def index(course_id: int):
         else:
             summary = AttainmentService.calculate(course, semester, class_scope)
             action = request.form.get("action") or "recalculate"
-            if action == "save_revision":
-                qualitative_overrides = {}
-                for item in summary["objective_results"]:
-                    objective_id = str(item["objective_id"])
-                    qualitative_overrides[objective_id] = {
-                        "excellent_count": request.form.get(f"excellent_count_{objective_id}", 0),
-                        "good_count": request.form.get(f"good_count_{objective_id}", 0),
-                        "medium_count": request.form.get(f"medium_count_{objective_id}", 0),
-                        "poor_count": request.form.get(f"poor_count_{objective_id}", 0),
-                    }
-                revision_errors = AnalysisRevisionService.validate_qualitative_overrides(
-                    summary,
-                    qualitative_overrides,
-                )
-                if revision_errors:
-                    for error in revision_errors:
-                        flash(error, "warning")
-                    return redirect(
-                        url_for(
-                            "analysis.index",
-                            course_id=course.id,
-                            semester=semester,
-                            class_scope=class_scope,
-                        )
+            try:
+                if action == "save_revision":
+                    qualitative_overrides = {}
+                    for item in summary["objective_results"]:
+                        objective_id = str(item["objective_id"])
+                        qualitative_overrides[objective_id] = {
+                            "excellent_count": request.form.get(f"excellent_count_{objective_id}", 0),
+                            "good_count": request.form.get(f"good_count_{objective_id}", 0),
+                            "medium_count": request.form.get(f"medium_count_{objective_id}", 0),
+                            "poor_count": request.form.get(f"poor_count_{objective_id}", 0),
+                        }
+                    revision_errors = AnalysisRevisionService.validate_qualitative_overrides(
+                        summary,
+                        qualitative_overrides,
                     )
-                current_user = AuthService.current_user()
-                AnalysisRevisionService.save_revision(
+                    if revision_errors:
+                        for error in revision_errors:
+                            flash(error, "warning")
+                        return redirect(
+                            url_for(
+                                "analysis.index",
+                                course_id=course.id,
+                                semester=semester,
+                                class_scope=class_scope,
+                            )
+                        )
+                    current_user = AuthService.current_user()
+                    AnalysisRevisionService.save_revision(
+                        course.id,
+                        semester,
+                        class_scope,
+                        qualitative_overrides=qualitative_overrides,
+                        analysis_note=request.form.get("analysis_note", ""),
+                        improvement_note=request.form.get("improvement_note", ""),
+                        created_by=current_user.display_name if current_user else "教师",
+                        commit=False,
+                    )
+                    summary, _ = AnalysisRevisionService.apply_active_revision(summary, course.id, semester, class_scope)
+                    change_note = "教师人工修订"
+                    success_message = "人工修订已保存，报告预览和 Word 导出会同步使用这版数据。"
+                else:
+                    summary, _ = AnalysisRevisionService.apply_active_revision(summary, course.id, semester, class_scope)
+                    change_note = "系统重新计算"
+                    success_message = "第四章数据已重新计算，可继续编辑第五章并查看报告预览。"
+
+                import_query = ImportBatch.query.filter_by(course_id=course.id, semester=semester)
+                latest_import = import_query.order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc()).first()
+                if latest_import and latest_import.source_files_json:
+                    source_import_ids = [
+                        item.id
+                        for item in import_query.filter_by(source_files_json=latest_import.source_files_json).all()
+                    ]
+                else:
+                    source_import_ids = [latest_import.id] if latest_import else []
+
+                AttainmentService.save_qualitative_records(summary, commit=False)
+                AnalysisRunService.mark_complete(
                     course.id,
                     semester,
                     class_scope,
-                    qualitative_overrides=qualitative_overrides,
-                    analysis_note=request.form.get("analysis_note", ""),
-                    improvement_note=request.form.get("improvement_note", ""),
-                    created_by=current_user.display_name if current_user else "教师",
+                    summary["student_count"],
+                    summary=summary,
+                    source_import_ids=source_import_ids,
+                    change_note=change_note,
+                    commit=False,
                 )
-                summary, _ = AnalysisRevisionService.apply_active_revision(summary, course.id, semester, class_scope)
-                change_note = "教师人工修订"
-                flash("人工修订已保存，报告预览和 Word 导出会同步使用这版数据。", "success")
+                db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                current_app.logger.info("分析结果保存失败：%s", type(exc).__name__)
+                flash("分析结果保存失败，本次修改已全部回滚，请重试。", "danger")
             else:
-                summary, _ = AnalysisRevisionService.apply_active_revision(summary, course.id, semester, class_scope)
-                change_note = "系统重新计算"
-                flash("第四章数据已重新计算，可继续编辑第五章并查看报告预览。", "success")
-            AttainmentService.save_qualitative_records(summary)
-            AnalysisRunService.mark_complete(
-                course.id,
-                semester,
-                class_scope,
-                summary["student_count"],
-                summary=summary,
-                change_note=change_note,
-            )
+                flash(success_message, "success")
         return redirect(url_for("analysis.index", course_id=course.id, semester=semester, class_scope=class_scope))
 
     has_analysis_result = AnalysisRunService.is_ready(course.id, semester, class_scope)

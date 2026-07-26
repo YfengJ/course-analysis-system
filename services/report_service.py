@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 import re
 
-from models import ImportBatch, Report, TeachingOutline, db
+from models import ImportBatch, Report, Student, TeachingOutline, db
 from services.analysis_revision_service import AnalysisRevisionService
 from services.analysis_run_service import AnalysisRunService
 from services.attainment_service import AttainmentService
@@ -27,8 +27,8 @@ class ReportService:
         return text
 
     @classmethod
-    def _report_filename(cls, course, semester, class_scope):
-        class_label = course.class_names if class_scope == "全部班级" else class_scope
+    def _report_filename(cls, course, semester, class_scope, class_label=None):
+        class_label = class_label or (course.class_names if class_scope == "全部班级" else class_scope)
         parts = [
             cls._safe_filename_part(getattr(course, "code", ""), "course", 24),
             str(getattr(course, "id", "") or "0"),
@@ -41,6 +41,19 @@ class ReportService:
             parts[3] = parts[3][: max(8, len(parts[3]) - 4)]
             filename = "_".join(parts) + ".docx"
         return filename
+
+    @staticmethod
+    def _report_class_label(course, semester, class_scope):
+        if class_scope and class_scope != "全部班级":
+            return class_scope
+        class_names = sorted(
+            {
+                item.class_name.strip()
+                for item in Student.query.filter_by(course_id=course.id, semester=semester).all()
+                if item.class_name and item.class_name.strip()
+            }
+        )
+        return "、".join(class_names) or course.class_names or class_scope or "全部班级"
 
     @classmethod
     def build_report_context(cls, course, semester: str, class_scope: str):
@@ -107,6 +120,7 @@ class ReportService:
             else:
                 source_imports = [latest_import]
         latest_snapshot = AnalysisRunService.latest_snapshot(course.id, semester, class_scope)
+        report_class_label = cls._report_class_label(course, semester, class_scope)
 
         return {
             "summary": summary,
@@ -123,6 +137,7 @@ class ReportService:
             "latest_outline": latest_outline,
             "latest_import": latest_import,
             "source_import_ids": [item.id for item in source_imports],
+            "report_class_label": report_class_label,
             "template_meta": {
                 "course_template": course.template_name or "通用课程模板",
                 "course_template_version": course.template_version or "v2",
@@ -136,7 +151,14 @@ class ReportService:
         """根据分析结果生成规范化 Word 报告并写入报告记录表。"""
         context = context or cls.build_report_context(course, semester, class_scope)
         summary = context["summary"]
-        document = ReportTemplateAdapter.build_document(course, semester, class_scope, context, template_path=template_path)
+        report_class_label = context.get("report_class_label") or class_scope
+        document = ReportTemplateAdapter.build_document(
+            course,
+            semester,
+            report_class_label,
+            context,
+            template_path=template_path,
+        )
 
         report_dir = Path(report_folder)
         report_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +168,7 @@ class ReportService:
             .first()
         )
         report_version = (previous_report.report_version + 1) if previous_report and previous_report.report_version else 1
-        filename = cls._report_filename(course, semester, class_scope)
+        filename = cls._report_filename(course, semester, class_scope, report_class_label)
         if report_version > 1:
             filename = filename.replace(".docx", f"_v{report_version}.docx")
         output_path = report_dir / filename

@@ -21,6 +21,7 @@
             {% include "partials/source_note.html" %}
             <form method="post" enctype="multipart/form-data">
                 {{ form.hidden_tag() }}
+                {% include "partials/form_errors.html" %}
                 <div class="mb-3">{{ form.file.label(class="form-label") }}{{ form.file(class="form-control") }}</div>
                 <button type="submit" name="action" value="preview" class="btn btn-dark w-100">预览教学大纲解析</button>
             </form>

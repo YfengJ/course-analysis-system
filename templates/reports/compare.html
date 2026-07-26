@@ -38,7 +38,7 @@
             <tbody>
             {% for item in comparison.objective_deltas %}
             <tr>
-                <td>{{ item.objective_title }}</td>
+                <td>{{ item.objective_title }}{% if item.change_type == 'added' %}（新增）{% elif item.change_type == 'removed' %}（已删除）{% endif %}</td>
                 <td>{{ "%.2f"|format(item.old_quantitative) }}</td>
                 <td>{{ "%.2f"|format(item.new_quantitative) }}</td>
                 <td>{{ "%+.2f"|format(item.quantitative_delta) }}</td>

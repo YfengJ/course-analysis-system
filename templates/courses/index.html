@@ -13,12 +13,12 @@
 <div class="panel-card filter-bar mb-3 reveal">
     <form method="get" class="row g-3 align-items-end">
         <div class="col-lg-5">
-            <label class="form-label">关键词</label>
-            <input class="form-control" type="text" name="keyword" value="{{ keyword }}" placeholder="输入课程名称或课程编号">
+            <label class="form-label" for="course-keyword">关键词</label>
+            <input class="form-control" id="course-keyword" type="text" name="keyword" value="{{ keyword }}" placeholder="输入课程名称或课程编号">
         </div>
         <div class="col-lg-3">
-            <label class="form-label">状态</label>
-            <select class="form-select" name="status">
+            <label class="form-label" for="course-status">状态</label>
+            <select class="form-select" id="course-status" name="status">
                 <option value="all" {% if status_filter == 'all' %}selected{% endif %}>全部课程</option>
                 <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待推进</option>
                 <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>已生成报告</option>

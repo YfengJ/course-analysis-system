@@ -53,6 +53,7 @@ class AnalysisRevisionService:
         analysis_note: str = "",
         improvement_note: str = "",
         created_by: str = "教师",
+        commit: bool = True,
     ):
         revision = cls.get_active_revision(course_id, semester, class_scope)
         if not revision:
@@ -68,7 +69,10 @@ class AnalysisRevisionService:
         revision.improvement_note = (improvement_note or "").strip()
         revision.created_by = created_by or revision.created_by or "教师"
         db.session.add(revision)
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return revision
 
     @classmethod

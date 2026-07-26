@@ -41,3 +41,20 @@ node_modules/
 .idea/
 .vscode/
 .DS_Store
+
+# Private authoring/thesis material (kept local, excluded from public releases)
+.superpowers/
+docx/
+mimic/
+docs/superpowers/
+findings.md
+progress.md
+task_plan.md
+generate_thesis_docs.py
+.flaskenv
+
+# scripts/ holds private thesis-authoring tools; publish only the maintained entry points
+scripts/*
+!scripts/build_release.py
+!scripts/run_tests.js
+!scripts/run_tests.py

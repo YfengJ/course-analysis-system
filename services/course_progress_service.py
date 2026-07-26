@@ -1,4 +1,5 @@
 from models import AnalysisRun, CourseInsight, ImportBatch, Report, Student, TeachingOutline
+from services.analysis_run_service import AnalysisRunService
 
 
 class CourseProgressService:
@@ -37,16 +38,28 @@ class CourseProgressService:
 
         outline_ready = latest_outline is not None
         score_ready = student_count > 0
-        latest_analysis_evidence = latest_analysis or latest_report
+        analysis_scope = latest_analysis or latest_report
         analysis_ready = bool(
-            latest_analysis_evidence
+            analysis_scope
+            and AnalysisRunService.is_ready(
+                course.id,
+                analysis_scope.semester,
+                analysis_scope.class_scope,
+            )
+        )
+        report_matches_analysis_scope = bool(
+            latest_report
             and (
-                latest_import is None
-                or latest_analysis_evidence.updated_at >= latest_import.created_at
+                latest_analysis is None
+                or (
+                    latest_report.semester == latest_analysis.semester
+                    and latest_report.class_scope == latest_analysis.class_scope
+                )
             )
         )
         report_ready = bool(
             latest_report
+            and report_matches_analysis_scope
             and analysis_ready
             and (latest_import is None or latest_report.created_at >= latest_import.created_at)
             and (latest_analysis is None or latest_report.created_at >= latest_analysis.updated_at)

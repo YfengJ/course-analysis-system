@@ -2,13 +2,28 @@ import re
 import unittest
 from pathlib import Path
 
-from scripts.build_release import collect_release_files
+from scripts.build_release import collect_release_files, should_include
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePackageTest(unittest.TestCase):
+    def test_release_allowlist_rejects_common_private_artifacts(self):
+        blocked = [
+            ".env.local",
+            ".env.production",
+            "private-student-scores.csv",
+            "generated-report.pdf",
+            "browser-private.png",
+            "backup-export.zip",
+            "var/tmp/report_charts/private.png",
+        ]
+
+        for relative in blocked:
+            with self.subTest(file=relative):
+                self.assertFalse(should_include(Path(relative)))
+
     def test_release_file_list_keeps_source_and_excludes_private_runtime_data(self):
         files = collect_release_files(PROJECT_ROOT)
 

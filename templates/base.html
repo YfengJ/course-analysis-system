@@ -37,7 +37,9 @@
                         <a class="{{ 'active' if request.endpoint == 'dashboard.index' else '' }}" href="{{ url_for('dashboard.index') }}" {% if request.endpoint == 'dashboard.index' %}aria-current="page"{% endif %}>课程工作台</a>
                         <a class="{{ 'active' if request.endpoint == 'course.index' else '' }}" href="{{ url_for('course.index') }}" {% if request.endpoint == 'course.index' %}aria-current="page"{% endif %}>课程列表</a>
                         <a class="{{ 'active' if request.endpoint == 'report_center.index' else '' }}" href="{{ url_for('report_center.index') }}" {% if request.endpoint == 'report_center.index' %}aria-current="page"{% endif %}>报告中心</a>
+                        {% if login_disabled or (current_user and current_user.role == 'admin') %}
                         <a class="{{ 'active' if (request.endpoint or '').startswith('admin.') else '' }}" href="{{ url_for('admin.backups') }}" {% if (request.endpoint or '').startswith('admin.') %}aria-current="page"{% endif %}>数据维护</a>
+                        {% endif %}
                         <a class="{{ 'active' if request.endpoint == 'guide.index' else '' }}" href="{{ url_for('guide.index') }}" {% if request.endpoint == 'guide.index' %}aria-current="page"{% endif %}>系统使用说明</a>
                     </nav>
                     {% if not login_disabled and current_user %}

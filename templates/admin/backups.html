@@ -32,11 +32,12 @@
             <form method="post" action="{{ url_for('admin.restore_backup') }}" enctype="multipart/form-data" onsubmit="return confirm('确定要恢复这个备份吗？当前数据库会被替换，系统会先保留一份恢复前副本。');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
-                    <input class="form-control" type="file" name="backup_file" accept=".zip" required>
+                    <label class="form-label" for="backup-file">备份文件</label>
+                    <input class="form-control" id="backup-file" type="file" name="backup_file" accept=".zip" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">输入“确认恢复”</label>
-                    <input class="form-control" type="text" name="confirm_restore" autocomplete="off" required>
+                    <label class="form-label" for="confirm-restore">输入“确认恢复”</label>
+                    <input class="form-control" id="confirm-restore" type="text" name="confirm_restore" autocomplete="off" required>
                     <div class="form-text">恢复会替换当前系统数据，提交前系统会先创建一份完整备份。</div>
                 </div>
                 <button type="submit" class="btn btn-outline-dark">上传并恢复</button>

@@ -189,6 +189,38 @@ class EvidenceChainFeatureTest(unittest.TestCase):
         self.assertEqual(comparison["objective_deltas"][0]["objective_title"], "课程目标1")
         self.assertEqual(comparison["objective_deltas"][0]["quantitative_delta"], 0.08)
 
+    def test_report_comparison_marks_objective_removed_from_new_version(self):
+        course = self._create_course_with_scores()
+        old_report = Report(
+            course_id=course.id,
+            semester=DEFAULT_SEMESTER,
+            class_scope="全部班级",
+            html_snapshot=json.dumps(
+                {
+                    "objective_results": [
+                        {
+                            "objective_title": "已删除目标",
+                            "quantitative_attainment": 0.7,
+                            "qualitative_attainment": 0.8,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+        )
+        new_report = Report(
+            course_id=course.id,
+            semester=DEFAULT_SEMESTER,
+            class_scope="全部班级",
+            html_snapshot=json.dumps({"objective_results": []}, ensure_ascii=False),
+        )
+
+        comparison = ReportComparisonService.compare_reports(old_report, new_report)
+
+        self.assertEqual(len(comparison["objective_deltas"]), 1)
+        self.assertEqual(comparison["objective_deltas"][0]["objective_title"], "已删除目标")
+        self.assertEqual(comparison["objective_deltas"][0]["change_type"], "removed")
+
     def test_attainment_service_no_longer_reads_private_reference_report(self):
         source = inspect.getsource(AttainmentService)
 

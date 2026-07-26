@@ -50,6 +50,36 @@ SCRIPT_ALLOWLIST = {
     "scripts/run_tests.js",
     "scripts/run_tests.py",
 }
+ROOT_FILE_ALLOWLIST = {
+    ".env.example",
+    ".gitignore",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "README.md",
+    "README.zh-CN.md",
+    "SECURITY.md",
+    "app.py",
+    "config.py",
+    "forms.py",
+    "init_db.py",
+    "models.py",
+    "package-lock.json",
+    "package.json",
+    "requirements.txt",
+}
+DOC_IMAGE_ALLOWLIST = {
+    "docs/images/analysis.png",
+    "docs/images/dashboard.png",
+    "docs/images/report-preview.png",
+}
+SAMPLE_DATA_ALLOWLIST = {
+    "sample_data/README.md",
+    "sample_data/sample_column_mapping.json",
+    "sample_data/sample_course_config.json",
+    "sample_data/sample_scores.csv",
+    "sample_data/通用成绩导入模板.xlsx",
+}
 
 
 def _as_posix(path: Path) -> str:
@@ -71,7 +101,25 @@ def should_include(relative_path: Path) -> bool:
         return False
     if relative_path.suffix in OFFICE_SUFFIXES and not relative.startswith("sample_data/"):
         return False
-    return True
+    if len(relative_path.parts) == 1:
+        return relative in ROOT_FILE_ALLOWLIST
+
+    root = relative_path.parts[0]
+    if root in {"routes", "services", "tests"}:
+        return relative_path.suffix == ".py"
+    if root == "templates":
+        return relative_path.suffix == ".html"
+    if root == "static":
+        return relative_path.suffix in {".css", ".js", ".svg"}
+    if root == ".github":
+        return relative_path.suffix in {".md", ".yml", ".yaml"}
+    if root == "docs":
+        return relative_path.suffix == ".md" or relative in DOC_IMAGE_ALLOWLIST
+    if root == "sample_data":
+        return relative in SAMPLE_DATA_ALLOWLIST
+    if root == "scripts":
+        return relative in SCRIPT_ALLOWLIST
+    return False
 
 
 def collect_release_files(project_root: Path) -> list[str]:

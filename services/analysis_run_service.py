@@ -69,6 +69,7 @@ class AnalysisRunService:
         summary=None,
         source_import_ids=None,
         change_note: str = "系统重新计算",
+        commit: bool = True,
     ):
         record = cls.get_record(course_id, semester, class_scope)
         if not record:
@@ -95,7 +96,10 @@ class AnalysisRunService:
             change_note=change_note or "系统重新计算",
         )
         db.session.add(snapshot)
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return record
 
     @classmethod
@@ -108,6 +112,8 @@ class AnalysisRunService:
         record = cls.get_record(course_id, semester, class_scope)
         if record is not None:
             return not latest_import or record.updated_at >= latest_import.created_at
+        if cls.latest_snapshot(course_id, semester, class_scope) is not None:
+            return False
         latest_report = Report.query.filter_by(
             course_id=course_id,
             semester=semester,
@@ -115,8 +121,8 @@ class AnalysisRunService:
         ).order_by(Report.created_at.desc(), Report.id.desc()).first()
         return bool(latest_report and (not latest_import or latest_report.created_at >= latest_import.created_at))
 
-    @staticmethod
-    def invalidate_for_input_change(course_id: int, semester: str | None = None):
+    @classmethod
+    def invalidate_for_input_change(cls, course_id: int, semester: str | None = None):
         run_query = AnalysisRun.query.filter_by(course_id=course_id)
         revision_query = AnalysisRevision.query.filter_by(course_id=course_id, is_active=True)
         insight_query = CourseInsight.query.filter_by(course_id=course_id)
@@ -126,6 +132,27 @@ class AnalysisRunService:
             revision_query = revision_query.filter_by(semester=semester)
             insight_query = insight_query.filter_by(semester=semester)
             qualitative_query = qualitative_query.filter_by(semester=semester)
+        report_query = Report.query.filter_by(course_id=course_id)
+        if semester:
+            report_query = report_query.filter_by(semester=semester)
+        seen_scopes = set()
+        for report in report_query.order_by(Report.created_at.desc(), Report.id.desc()).all():
+            scope = (report.semester, report.class_scope)
+            if scope in seen_scopes:
+                continue
+            seen_scopes.add(scope)
+            if cls.latest_snapshot(course_id, report.semester, report.class_scope) is None:
+                db.session.add(
+                    AnalysisSnapshot(
+                        course_id=course_id,
+                        semester=report.semester,
+                        class_scope=report.class_scope,
+                        version_no=1,
+                        student_count=0,
+                        status="已失效",
+                        change_note="输入数据已更新，需重新计算",
+                    )
+                )
         run_query.delete(synchronize_session=False)
         revision_query.update({AnalysisRevision.is_active: False}, synchronize_session=False)
         insight_query.delete(synchronize_session=False)

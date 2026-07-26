@@ -213,7 +213,7 @@ class ScoreTemplateAdapter:
                 for item in block["items"]:
                     if item["column_index"] >= raw.shape[1]:
                         continue
-                    item_scores[item["assessment_name"]] = cls._safe_float(raw.iat[row_index, item["column_index"]])
+                    item_scores[item["assessment_name"]] = cls._score_value(raw.iat[row_index, item["column_index"]])
                 record["objective_scores"][block["objective_ref"]] = item_scores
                 if block["attainment_column_index"] < raw.shape[1]:
                     record["objective_attainment"][block["objective_ref"]] = cls._safe_float(raw.iat[row_index, block["attainment_column_index"]])
@@ -338,3 +338,12 @@ class ScoreTemplateAdapter:
             return float(value)
         except (TypeError, ValueError):
             return 0.0
+
+    @classmethod
+    def _score_value(cls, value):
+        if value in (None, "") or pd.isna(value):
+            return 0.0
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return cls._cell_text(value)

@@ -301,10 +301,10 @@
                         <strong>{{ item.objective_title }}</strong>
                         <small class="d-block text-muted">{{ item.objective_description }}</small>
                     </td>
-                    <td><input type="number" min="0" class="form-control" name="excellent_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['优'] }}"></td>
-                    <td><input type="number" min="0" class="form-control" name="good_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['良'] }}"></td>
-                    <td><input type="number" min="0" class="form-control" name="medium_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['中'] }}"></td>
-                    <td><input type="number" min="0" class="form-control" name="poor_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['差'] }}"></td>
+                    <td><input type="number" min="0" class="form-control" name="excellent_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['优'] }}" aria-label="{{ item.objective_title }} - 优等人数"></td>
+                    <td><input type="number" min="0" class="form-control" name="good_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['良'] }}" aria-label="{{ item.objective_title }} - 良好人数"></td>
+                    <td><input type="number" min="0" class="form-control" name="medium_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['中'] }}" aria-label="{{ item.objective_title }} - 中等人数"></td>
+                    <td><input type="number" min="0" class="form-control" name="poor_count_{{ item.objective_id }}" value="{{ item.qualitative_counts['差'] }}" aria-label="{{ item.objective_title }} - 较差人数"></td>
                     <td>{{ "%.2f"|format(item.qualitative_attainment) }}</td>
                 </tr>
                 {% endfor %}

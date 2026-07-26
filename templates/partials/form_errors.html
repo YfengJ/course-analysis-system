@@ -1,0 +1,11 @@
+{% if form and form.errors %}
+<div class="alert alert-danger" role="alert" tabindex="-1" data-form-errors>
+    <strong>请检查以下内容：</strong>
+    <ul class="mb-0 mt-2">
+        {% for field_name, errors in form.errors.items() %}
+        {% set field = form[field_name] %}
+        <li><a class="alert-link" href="#{{ field.id }}">{{ field.label.text }}</a>：{{ errors|join('；') }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

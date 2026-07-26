@@ -60,6 +60,7 @@
             </div>
             <form method="post">
                 {{ form.hidden_tag() }}
+                {% include "partials/form_errors.html" %}
                 <div class="row g-3">
                     <div class="col-md-6">{{ form.code.label(class="form-label") }}{{ form.code(class="form-control") }}</div>
                     <div class="col-md-6">{{ form.name.label(class="form-label") }}{{ form.name(class="form-control") }}</div>

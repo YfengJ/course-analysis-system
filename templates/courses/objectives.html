@@ -67,6 +67,7 @@
             <h2 class="mb-3">新增课程目标</h2>
             <form method="post">
                 {{ form.hidden_tag() }}
+                {% include "partials/form_errors.html" %}
                 <div class="mb-3">{{ form.title.label(class="form-label") }}{{ form.title(class="form-control") }}</div>
                 <div class="mb-3">{{ form.description.label(class="form-label") }}{{ form.description(class="form-control", rows="5") }}</div>
                 <div class="mb-3">{{ form.weight.label(class="form-label") }}{{ form.weight(class="form-control") }}</div>

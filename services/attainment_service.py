@@ -476,12 +476,14 @@ class AttainmentService:
             total_distribution_counts[cls._distribution_bucket(rate)] += 1
             total_qualitative_counts[cls._qualitative_bucket(rate)] += 1
 
-        total_qualitative_score_percent = (
-            sum(total_qualitative_counts[key] * cls.QUALITATIVE_SCORE_MAP[key] for key in total_qualitative_counts) / len(total_student_rate_list)
-            if total_student_rate_list
-            else 0.0
+        total_qualitative = round(
+            sum(
+                item["qualitative_attainment"] * (item["objective_weight"] / total_objective_weight)
+                for item in objective_results
+            ),
+            4,
         )
-        total_qualitative = round(total_qualitative_score_percent / 100, 4)
+        total_qualitative_score_percent = total_qualitative * 100
         total_average_percent = round(cls._safe_mean(total_student_rate_percents), 2)
         total_median_percent = round(cls._safe_median(total_student_rate_percents), 2)
         total_stddev_percent = round(cls._safe_stdev(total_student_rate_percents), 2)
@@ -621,7 +623,7 @@ class AttainmentService:
         }
 
     @classmethod
-    def save_qualitative_records(cls, summary):
+    def save_qualitative_records(cls, summary, commit: bool = True):
         """将最新一次分析结果中的定性评价写入数据库。"""
         course = summary["course"]
         semester = summary["semester"]
@@ -643,4 +645,7 @@ class AttainmentService:
             existing.medium_count = item["qualitative_counts"]["中"]
             existing.poor_count = item["qualitative_counts"]["差"]
             existing.score_rate = item["qualitative_attainment"]
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
